@@ -12,6 +12,10 @@ public class Matrice
         return Shape[0]*Shape[1];
     }
 
+    /**
+     *  fonction pour vérifier l'égalité de deux matrices
+     *
+     */
     public override bool Equals(object? obj)
     {
         if (obj is Matrice matrice)
@@ -34,6 +38,10 @@ public class Matrice
         return false;
     }
 
+    /**
+     *  fonction pour afficher les coéfficients de la matricielle sous forme de chaine de caractère
+     *
+     */
     public override string ToString()
     {
         string result = "\n";
@@ -54,6 +62,10 @@ public class Matrice
     //         Shape;
     // }
 
+    /**
+     *  opérateur pour facilité l'adition matricielle
+     *
+     */
     public static Matrice operator+(Matrice matrice1,Matrice matrice2)
     {
         double[][] tmp = new double[matrice2.
@@ -73,6 +85,10 @@ public class Matrice
         return new Matrice(tmp);
     }
     
+    /**
+     *  opérateur pour facilité la soustraction matricielle
+     *
+     */
     public static Matrice operator-(Matrice matrice1,Matrice matrice2)
     {
         double[][] tmp = new double[matrice2.
@@ -91,6 +107,11 @@ public class Matrice
         }
         return new Matrice(tmp);
     }
+    
+    /**
+     *  opérateur pour facilité le produit d'Hadamard
+     *
+     */
     public static Matrice operator*(Matrice matrice1,Matrice matrice2)
     {
         double[][] tmp = new double[matrice2.
@@ -110,6 +131,10 @@ public class Matrice
         return new Matrice(tmp);
     }
 
+    /**
+     *  opérateur pour facilité la multiplication des coéfficients d'une matrice avec une constante
+     *
+     */
     public static Matrice operator*(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
@@ -143,6 +168,10 @@ public class Matrice
         return new Matrice(tmp);
     }
     
+    /**
+     *  opérateur pour facilité la soustration des coéfficients d'une matrice avec une constante
+     *
+     */
     public static Matrice operator-(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
@@ -157,6 +186,11 @@ public class Matrice
         return new Matrice(tmp);
     }
 
+    
+    /**
+     *  fonction pour vérifier l'égalité de deux matrices
+     *
+     */
     public static bool operator ==(Matrice matrice1, Matrice matrice2)
     {
         if (matrice1.Shape[0]==matrice2.Shape[0] && matrice1.Shape[1]==matrice2.Shape[1])
@@ -176,6 +210,10 @@ public class Matrice
         return false;
     }
     
+    /**
+     *  fonction pour vérifier si deux matrices ont aumoins un coéfficient différent
+     *
+     */
     public static bool operator !=(Matrice matrice1, Matrice matrice2)
     {
         if (matrice1.Shape[0]==matrice2.Shape[0] && matrice1.Shape[1]==matrice2.Shape[1])
@@ -194,6 +232,10 @@ public class Matrice
         return false;
     }
     
+    
+    /**
+     * Fonction pour faire le produit matricielle
+     */
     public  Matrice Dot(Matrice matrice1)
     {
         
@@ -224,6 +266,9 @@ public class Matrice
     
     
 
+    /**
+     * Fonction pour calculer la transposée d'une matrice
+     */
     public Matrice Transpose()
     {
         
