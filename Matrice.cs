@@ -63,7 +63,7 @@ public class Matrice
     // }
 
     /**
-     *  opérateur pour facilité l'adition matricielle
+     *  opérateur pour facilité l'addition matricielle
      *
      */
     public static Matrice operator+(Matrice matrice1,Matrice matrice2)
@@ -186,7 +186,7 @@ public class Matrice
     
     
     /**
-     *  opérateur pour facilité l'adition des coéfficients d'une matrice avec une constante
+     *  opérateur pour facilité l'addition des coéfficients d'une matrice avec une constante
      *  
      */
     public static Matrice operator+(Matrice matrice,double cte)
