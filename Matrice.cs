@@ -68,6 +68,9 @@ public class Matrice
      */
     public static Matrice operator+(Matrice matrice1,Matrice matrice2)
     {
+        if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
+            throw new Exception("Matrice must have the same size");
+        }
         double[][] tmp = new double[matrice2.
                 Shape[0]][];
         
@@ -91,6 +94,9 @@ public class Matrice
      */
     public static Matrice operator-(Matrice matrice1,Matrice matrice2)
     {
+        if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
+            throw new Exception("Matrice must have the same size");
+        }
         double[][] tmp = new double[matrice2.
                 Shape[0]][];
         
@@ -114,6 +120,9 @@ public class Matrice
      */
     public static Matrice operator*(Matrice matrice1,Matrice matrice2)
     {
+        if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
+            throw new Exception("Matrice must have the same size");
+        }
         double[][] tmp = new double[matrice2.
                 Shape[0]][];
         
@@ -126,6 +135,32 @@ public class Matrice
                     Shape[1]; j++)
             {
                 tmp[i][j]=matrice2.Matrix[i][j]*matrice1.Matrix[i][j];
+            }
+        }
+        return new Matrice(tmp);
+    }
+    
+    /**
+     *  opérateur pour facilité le produit d'Hadamard
+     *
+     */
+    public static Matrice operator/(Matrice matrice1,Matrice matrice2)
+    {
+        if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
+            throw new Exception("Matrice must have the same size");
+        }
+        double[][] tmp = new double[matrice2.
+                Shape[0]][];
+        
+        for (var i = 0; i < matrice1.
+                Shape[0]; i++)
+        {
+            tmp[i] = new double[matrice1.
+                    Shape[1]];
+            for (var j = 0; j < matrice1.
+                    Shape[1]; j++)
+            {
+                tmp[i][j]=matrice2.Matrix[i][j]/matrice1.Matrix[i][j];
             }
         }
         return new Matrice(tmp);
@@ -180,6 +215,24 @@ public class Matrice
             for (var j = 0; j < matrice.Shape[1]; j++)
             {
                 tmp[i][j]-=cte;
+            }
+        }
+
+        return new Matrice(tmp);
+    }
+    
+    /**
+     *  opérateur pour facilité la soustration des coéfficients d'une matrice avec une constante
+     *
+     */
+    public static Matrice operator/(Matrice matrice,double cte)
+    {
+        double[][] tmp = matrice.Matrix;
+        for (var i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (var j = 0; j < matrice.Shape[1]; j++)
+            {
+                tmp[i][j]/=cte;
             }
         }
 
@@ -292,6 +345,16 @@ public class Matrice
         
         Shape=[matrix.Length,matrix[0].Length];
     }
+    
+    public Matrice(List<List<double>> matrix)
+    {
+        Matrix = new double[matrix.Count][];
+        for (var i = 0; i < matrix.Count; i++)
+        {
+            Matrix[i] = matrix[i].ToArray();
+        }
+        Shape=[matrix.Count,matrix[0].Count];
+    }
 
     public Matrice(int[] shape)
     {
@@ -308,6 +371,26 @@ public class Matrice
     }
 
     public Matrice(double[] array,int[] shape)
+    {
+        Shape=shape;
+        Matrix=new double[
+                Shape[0]][];
+        var k = 0;
+        for (var i = 0; i < 
+                Shape[0]; i++)
+        {
+            Matrix[i] = new double[
+                    Shape[0]];
+            for (var j = 0; j < 
+                    Shape[1]; j++)
+            {
+                Matrix[i][j] = array[k];
+                k++;
+            }
+        }
+    }
+    
+    public Matrice(List<double> array,int[] shape)
     {
         Shape=shape;
         Matrix=new double[
