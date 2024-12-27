@@ -56,11 +56,6 @@ public class Matrice
         return $"{result}";
     }
 
-    // public int[] Shape()
-    // {
-    //     return 
-    //         Shape;
-    // }
 
     /**
      *  opérateur pour facilité l'addition matricielle
@@ -183,8 +178,35 @@ public class Matrice
 
         return new Matrice(tmp);
     }
-    
-    
+
+
+
+    /**
+     *  opérateur pour facilité le produit matrice et vecteur
+     *
+     */
+    public static double[] operator *(Matrice matrice, double[] array)
+    {
+        if (array.Length == matrice.Shape[1])
+        {
+            double[] result = new double[matrice.Shape[0]];
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                double som = 0.0;
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    som += matrice.Matrix[i][j] * array[j];
+                }
+                result[i] = som;
+            }
+            return result;
+        }
+        else
+        {
+            throw new Exception("incompatible size");
+        }
+    }
+
     /**
      *  opérateur pour facilité l'addition des coéfficients d'une matrice avec une constante
      *  
@@ -317,7 +339,27 @@ public class Matrice
         return new Matrice(tmp);
     }
     
-    
+    public static double[] Dot(Matrice matrice, double[] array)
+    {
+        if (array.Length == matrice.Shape[1])
+        {
+            double[] result = new double[matrice.Shape[0]];
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                double som = 0.0;
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    som += matrice.Matrix[i][j] * array[j];
+                }
+                result[i] = som;
+            }
+            return result;
+        }
+        else
+        {
+            throw new Exception("incompatible size");
+        }
+    }
 
     /**
      * Fonction pour calculer la transposée d'une matrice
@@ -410,13 +452,360 @@ public class Matrice
         }
     }
 
-    // public double Determinant()
-    // {
-    //     if ((Shape[0], Shape[1]) == (2, 2))
-    //     {
-    //         return Matrix[0][0]*Matrix[1][1]-Matrix[0][1]*Matrix[1][0];
-    //     }
-    //     return 0.0;
-    // }
+    public  static double Determinant(double[][] matrice, int j = 0)
+    {
 
+        if (matrice.Length == 2 && matrice[0].Length == 2)
+        {
+            return matrice[0][0] * matrice[1][1] - matrice[1][0] * matrice[0][1];
+        }
+        else
+        {
+            double deter = 0.0;
+            for (int i = j; i < matrice[0].Length; i++)
+            {
+                deter += Math.Pow(-1.0, (double)i) * matrice[0][i] * Determinant(ExtractCoMatrix(matrice, i), i);
+            }
+            return deter;
+        }
+    }
+
+    public Matrice Copy() => new(Matrix);
+
+    public Matrice Adjacence()
+    {
+        Matrice mat = new(Shape);
+        for (int i = 0; i < mat.Shape[0]; i++)
+        {
+            for (int j = 0; j < mat.Shape[1]; j++)
+            {
+                mat.Matrix[i][j] = Math.Pow(-1.0,(double)(i+j))*Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+            }
+        }
+        return mat;
+    }
+
+
+    public Matrice Hstack(double[] array, string place = "front")
+    {
+        Matrice matrice = new([Shape[0], Shape[1] + 1]);
+        if (place=="end")
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                matrice.Matrix[i][Shape[1]] = array[i];
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = Matrix[i][j];
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                matrice.Matrix[i][0] = array[i];
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j + 1] = Matrix[i][j];
+                }
+            }
+        }
+        return matrice;
+    }
+
+    public Matrice Hstack(double[][] array, string place = "front")
+    {
+        Matrice mat = new(array);
+        Matrice matrice = new([Shape[0], Shape[1] + mat.Shape[0]]);
+        mat = mat.Transpose();
+
+        if (place=="end")
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = Matrix[i][j];
+                }
+            }
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = Shape[1]; j < matrice.Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = 0; j < mat.Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = mat.Matrix[i][j];
+                }
+            }
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
+                }
+            }
+        }
+        return matrice;
+    }
+
+    public Matrice Vstack(double[] array,string place="front")
+    {
+        Matrice matrice = new([Shape[0] + 1, Shape[1]]);
+        switch (place)
+        {
+            case "front":
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (i == 0)
+                    {
+                        matrice.Matrix[i] = array;
+                    }
+                    else
+                    {
+                        matrice.Matrix[i] = Matrix[i - 1];
+                    }
+                }
+                break;
+            case "end":
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (i == matrice.Shape[0]-1)
+                    {
+                        matrice.Matrix[i] = array;
+                    }
+                    else
+                    {
+                        matrice.Matrix[i] = Matrix[i];
+                    }
+                }
+                break;
+            default:
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (i == 0)
+                    {
+                        matrice.Matrix[i] = array;
+                    }
+                    else
+                    {
+                        matrice.Matrix[i] = Matrix[i - 1];
+                    }
+                }
+                break;
+        }
+        return matrice;
+    }
+
+
+
+    public Matrice Vstack(double[][] array, string place = "front")
+    {
+        Matrice matrice = new([Shape[0] + array.Length, Shape[1]]);
+        switch (place)
+        {
+            case "front":
+                for (int i = 0; i < array.Length; i++)
+                {
+                    matrice.Matrix[i] = array[i];
+                }
+                for (int i = array.Length; i < matrice.Shape[0]; i++)
+                {
+                   matrice.Matrix[i] = Matrix[i-array.Length];
+                }
+                break;
+            case "end":
+                for (int i = 0; i < Shape[0]; i++)
+                {
+                   matrice.Matrix[i] = Matrix[i];
+                }
+                for (int i = Shape[0]; i < matrice.Shape[0]; i++)
+                {
+                    matrice.Matrix[i] = array[i - Shape[0]];
+                }
+                break;
+            default:
+                for (int i = 0; i < array.Length; i++)
+                {
+                    matrice.Matrix[i] = array[i];
+                }
+                for (int i = array.Length; i < matrice.Shape[0]; i++)
+                {
+                   matrice.Matrix[i] = Matrix[i-array.Length];
+                }
+                break;
+        }
+        return matrice;
+    }
+
+    public static double[][] ExtractCoFacteur(double[][] matrice, int i, int j)
+    {
+
+        int m = matrice.Length - 1;
+        double[][] result = new double[m][];
+
+        int k = 0;
+        int t = 0;
+
+        while (k < matrice.Length)
+        {
+            if (k != i)
+            {
+                double[] tmp = new double[m];
+                int z = 0;
+                int e = 0;
+                while (e < matrice[k].Length)
+                {
+                    if (e != j)
+                    {
+                        tmp[z++] = matrice[k][e];
+                    }
+                    e++;
+                }
+                result[t++] = tmp;
+            }
+            k++;
+        }
+        return result;
+    }
+
+    private static double[][] ExtractCoMatrix(double[][] matrice,int j)
+    {
+
+        int m = matrice.Length-1;
+        double[][] result = new double[m][];
+
+        int k = 1;
+        int t = 0;
+
+        while (k < matrice.Length)
+        {
+            double[] tmp = new double[m];
+            int z = 0;
+            int e = 0;
+            while (e < matrice[k].Length)
+            {
+                if (e != j)
+                {
+                    tmp[z++]=matrice[k][e];
+                }
+                e++;
+            }
+            result[t++]=tmp;
+            k++;
+        }
+        return result;
+    }
+
+
+    public double Sum()
+    {
+        double som = 0.0;
+        for (int i = 0; i < Shape[0]; i++)
+        {
+            for (int j = 0; j < Shape[1]; j++)
+            {
+                som += Matrix[i][j];
+            }
+        }
+        return som;
+    }
+
+    public double[] CumSum()
+    {
+        double[] som = new double[Shape[0]];
+        for (int i = 0; i < Shape[0]; i++)
+        {
+            for (int j = 0; j < Shape[1]; j++)
+            {
+                som[i] += Matrix[i][j];
+            }
+        }
+        return som;
+    }
+
+    public double Mean()
+    {
+        return Sum() / (Shape[0] * Shape[1]);
+    }
+
+    public double[] CumMean()
+    {
+        double[] arrayMean = new double[Shape[0]];
+        double[] arraySum = CumSum();
+        for (int i = 0; i < Shape[0]; i++)
+        {
+            arrayMean[i] = arraySum[i] / Shape[0];
+        }
+        return arrayMean;
+    }
+
+    public double Var()
+    {
+        double mean = Mean();
+        double cumsum = 0.0;
+        for (int i = 0; i < Shape[0]; i++)
+        {
+            for (int j = 0; j < Shape[1]; j++)
+            {
+                cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
+            }
+        }
+        return cumsum / (Shape[0] * Shape[1]);
+    }
+
+    public double Sd()
+    {
+        return Math.Sqrt(Var());
+    }
+
+    public double[] CumVar()
+    {
+        double[] arrayVar = new double[Shape[0]];
+        double[] arrayMean = CumMean();
+        for (int i = 0; i < Shape[0]; i++)
+        {
+            for(int j = 0; j < Shape[1]; j++)
+            {
+                arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0)/Shape[1]);
+            }
+        }
+        return arrayVar;
+    }
+
+    public double[] CumSd()
+    {
+        double[] cumVar = CumVar();
+        double[] cumsd = new double[Shape[0]];
+        for (int i = 0; i < cumVar.Length; i++)
+        {
+            cumsd[i] = Math.Sqrt(cumVar[i]);
+        }
+        return cumsd;
+    }
+
+    public Matrice Inverse()
+    {
+        double determinant = Determinant(Matrix);
+        if (determinant==0)
+        {
+            throw new Exception("non-invertible matrix because its determinant is zero");
+        }
+        else
+        {
+            Matrice matrice = Adjacence();
+            matrice /= determinant;
+            return matrice;
+        }
+    }
+
+    public double[] Solve(double[] beta) => Inverse() * beta;
 }
