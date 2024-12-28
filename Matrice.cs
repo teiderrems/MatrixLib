@@ -1,4 +1,6 @@
-﻿namespace MatriceLib;
+﻿using System.Runtime.CompilerServices;
+
+namespace MatriceLib;
 
 public class Matrice
 {
@@ -57,6 +59,23 @@ public class Matrice
     }
 
 
+    public double Trace()
+    {
+        if (Shape[0] == Shape[1])
+        {
+            double som = 0.0;
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                som += Matrix[i][i];
+            }
+            return som;
+        }
+        else
+        {
+            throw new Exception("Matrix must be square");
+        }
+    }
+
     /**
      *  opérateur pour facilité l'addition matricielle
      *
@@ -108,7 +127,34 @@ public class Matrice
         }
         return new Matrice(tmp);
     }
-    
+
+
+    /**
+    *  opérateur pour avoir l'opposé des coefficients d'une matricielle
+    *
+    */
+    public static Matrice operator -(Matrice matrice)
+    {
+         
+        double[][] tmp = new double[matrice.
+                Shape[0]][];
+
+        for (var i = 0; i < matrice.
+                Shape[0]; i++)
+        {
+            tmp[i] = new double[matrice.
+                    Shape[1]];
+            for (var j = 0; j < matrice.
+                    Shape[1]; j++)
+            {
+                tmp[i][j] = (-1)*matrice.Matrix[i][j];
+            }
+        }
+        return new Matrice(tmp);
+    }
+
+
+
     /**
      *  opérateur pour facilité le produit d'Hadamard
      *
@@ -179,7 +225,68 @@ public class Matrice
         return new Matrice(tmp);
     }
 
+    public static double[] Unique(double[] array)
+    {
+        List<double> list = new();
+        for (int i = 0; i < array.Length; i++)
+        {
+            if (!list.Contains(array[i]))
+            {
+                list.Add(array[i]);
+            }
+        }
+        return [..list];
+    }
 
+    public static Matrice Identity(int shape,int T=1)
+    {  
+        Matrice matrice = new([shape,shape]);
+        if (T>1)
+        {
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (i == j)
+                        {
+                            matrice.Matrix[i][j] = 1.0;
+                        }
+                        else
+                        {
+                            matrice.Matrix[i][j] = 0.0;
+                        }
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+            //List<ParameterizedThreadStart> list = new(T);
+            //for (int i = 0; i < T; i++)
+            //{
+            //    int[] param = { i, T };
+            //    list.Add(new ParameterizedThreadStart(param));
+            //}
+        }
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    if (i == j)
+                    {
+                        matrice.Matrix[i][j] = 1.0;
+                    }
+                    else
+                    {
+                        matrice.Matrix[i][j] = 0.0;
+                    }
+                }
+            }
+        }
+        return matrice;
+    }
 
     /**
      *  opérateur pour facilité le produit matrice et vecteur
@@ -805,6 +912,79 @@ public class Matrice
             matrice /= determinant;
             return matrice;
         }
+    }
+
+    public static Matrice Ones(int[] shape)
+    {
+        Matrice matrice = new(shape);
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                matrice.Matrix[i][j] = 1.0;
+            }
+        }
+        return matrice;
+    }
+
+    public static Matrice Ones(int shape,int T=1)
+    {
+        Matrice matrice = new([shape,shape]);
+        if (T > 1)
+        {
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = t; i < matrice.Shape[0]; i += T)
+                {
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = 0.0;
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = 0.0;
+                }
+            }
+        }
+        return matrice;
+    }
+
+    public static Matrice Zeros(int shape,int T=1)
+    {
+        Matrice matrice = new([shape,shape]);
+        if (T>1)
+        {
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = t; i < matrice.Shape[0]; i += T)
+                {
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = 0.0;
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    matrice.Matrix[i][j] = 0.0;
+                }
+            }
+        }
+        return matrice;
     }
 
     public double[] Solve(double[] beta) => Inverse() * beta;
