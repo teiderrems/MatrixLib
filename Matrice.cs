@@ -914,19 +914,6 @@ public class Matrice
         }
     }
 
-    public static Matrice Ones(int[] shape)
-    {
-        Matrice matrice = new(shape);
-        for (int i = 0; i < matrice.Shape[0]; i++)
-        {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                matrice.Matrix[i][j] = 1.0;
-            }
-        }
-        return matrice;
-    }
-
     public static Matrice Ones(int shape,int T=1)
     {
         Matrice matrice = new([shape,shape]);
@@ -938,7 +925,7 @@ public class Matrice
                 {
                     for (int j = 0; j < matrice.Shape[1]; j++)
                     {
-                        matrice.Matrix[i][j] = 0.0;
+                        matrice.Matrix[i][j] = 1.0;
                     }
                 }
             };
