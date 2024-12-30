@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.ComponentModel.Design;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace MatriceLib;
 
@@ -41,24 +43,32 @@ public class Matrice
     }
 
     /**
-     *  fonction pour afficher les coéfficients de la matricielle sous forme de chaine de caractère
-     *
+     *  fonction pour afficher les coefficients de la matricielle sous forme de chaine de caractère
+     *  Exemple: Matrice mat=new([[1,2,3],[4,5,6],[7,8,9]]);
+     *  Console.WriteLine(mat);=>[[1,2,3],[4,5,6],[7,8,9]]
      */
     public override string ToString()
     {
-        string result = "\n";
+        string result = "[";
         for (var i = 0; i < Shape[0]; i++)
         {
+            result += "[";
             for (var j = 0; j < Shape[1]; j++)
             {
-                result += $"\t{Matrix[i][j]}";
+                result += $"{Matrix[i][j]},";
             }
-            result += "\n";
+            result = result.Remove(result.Length - 1);
+            result += "],";
         }
+        result = result.Remove(result.Length - 1);
+        result += "]";
         return $"{result}";
     }
 
-
+    /**
+     *  Fonction pour calculer la Trace de la matrice courante
+     *
+     */
     public double Trace()
     {
         if (Shape[0] == Shape[1])
@@ -225,6 +235,10 @@ public class Matrice
         return new Matrice(tmp);
     }
 
+    /**
+     *  Fonction pour récupérer les coefficients uniques contenu dans un tableau
+     *
+     */
     public static double[] Unique(double[] array)
     {
         List<double> list = new();
@@ -238,6 +252,11 @@ public class Matrice
         return [..list];
     }
 
+    /**
+     *  Fonction pour générer la matrice identité
+     *  Exemple: Matrice mat=Matrice.Identity(3); 
+     *  Console.WriteLine(mat);=>[[1,0,0],[0,1,0],[0,0,1]]
+     */
     public static Matrice Identity(int shape,int T=1)
     {  
         Matrice matrice = new([shape,shape]);
@@ -261,12 +280,6 @@ public class Matrice
                 }
             };
             Parallel.For(0, T, (t) => func(t, T));
-            //List<ParameterizedThreadStart> list = new(T);
-            //for (int i = 0; i < T; i++)
-            //{
-            //    int[] param = { i, T };
-            //    list.Add(new ParameterizedThreadStart(param));
-            //}
         }
         else
         {
@@ -393,7 +406,7 @@ public class Matrice
     }
     
     /**
-     *  fonction pour vérifier si deux matrices ont aumoins un coéfficient différent
+     *  fonction pour vérifier si deux matrices ont au moins un coefficients différent
      *
      */
     public static bool operator !=(Matrice matrice1, Matrice matrice2)
@@ -413,52 +426,103 @@ public class Matrice
         }
         return false;
     }
-    
-    
+
+
     /**
-     * Fonction pour faire le produit matricielle
+     *  Fonction faire le produit matriciel
+     *  matrice1: la matrice avec laquelle on veut faire le produit avec la matrice courante
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour calculer le produit matriciel
      */
-    public  Matrice Dot(Matrice matrice1)
+    public Matrice Dot(Matrice matrice1,int T=1)
     {
-        
         if (matrice1.Shape[1]!=this.Shape[0])
         {
             throw new Exception("colonne number of matrice1 should be the same than row number of current matrice ");
         }
-        
         double[][] tmp = new double[this.Shape[0]][];
-        for (var i = 0; i < matrice1.
-                 Shape[0]; i++)
+        if (T>1)
         {
-            tmp[i] = new double[this.
-                Shape[1]];
-            double som = 0;
-            for (var j = 0; j < this.
-                     Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                for (var k = 0; k < this.Shape[0]; k++)
+                for (var i = t; i < matrice1.
+                 Shape[0]; i+=T)
                 {
-                    som+=matrice1.Matrix[i][k]*this.Matrix[k][j];
+                    tmp[i] = new double[this.
+                        Shape[1]];
+                    double som = 0;
+                    for (var j = 0; j < this.
+                             Shape[1]; j++)
+                    {
+                        for (var k = 0; k < this.Shape[0]; k++)
+                        {
+                            som += matrice1.Matrix[i][k] * this.Matrix[k][j];
+                        }
+                        tmp[i][j] = som;
+                    }
                 }
-                tmp[i][j] = som;
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (var i = 0; i < matrice1.
+                 Shape[0]; i++)
+            {
+                tmp[i] = new double[this.
+                    Shape[1]];
+                double som = 0;
+                for (var j = 0; j < this.
+                         Shape[1]; j++)
+                {
+                    for (var k = 0; k < this.Shape[0]; k++)
+                    {
+                        som += matrice1.Matrix[i][k] * this.Matrix[k][j];
+                    }
+                    tmp[i][j] = som;
+                }
             }
         }
         return new Matrice(tmp);
     }
-    
-    public static double[] Dot(Matrice matrice, double[] array)
+
+    /**
+     * Fonction pour faire le produit matrice-vecteur
+     * matrice: la matrice avec laquelle on veut faire le produit
+     * array: le vecteur avec lequel on veut faire le produit
+     * T: nombre de thread ou processeur logique qui sera utilisé pour calculer le produit matrice-vecteur
+     */
+    public static double[] Dot(Matrice matrice, double[] array,int T=1)
     {
         if (array.Length == matrice.Shape[1])
         {
             double[] result = new double[matrice.Shape[0]];
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            if (T>1)
             {
-                double som = 0.0;
-                for (int j = 0; j < matrice.Shape[1]; j++)
+                Action<int, int> func = (int t, int T) =>
                 {
-                    som += matrice.Matrix[i][j] * array[j];
+                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    {
+                        double som = 0.0;
+                        for (int j = 0; j < matrice.Shape[1]; j++)
+                        {
+                            som += matrice.Matrix[i][j] * array[j];
+                        }
+                        result[i] = som;
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    double som = 0.0;
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        som += matrice.Matrix[i][j] * array[j];
+                    }
+                    result[i] = som;
                 }
-                result[i] = som;
             }
             return result;
         }
@@ -470,19 +534,39 @@ public class Matrice
 
     /**
      * Fonction pour calculer la transposée d'une matrice
+     * T: nombre de thread ou processeur logique qui sera utilisé pour calculer la transposée de la matrice courante
      */
-    public Matrice Transpose()
-    {
-        
+    public Matrice Transpose(int T=1)
+    { 
         double[][] matrix = new double[Shape[1]][];
-        for (var i = 0; i < Shape[1]; i++)
+        if (T>1)
         {
-            matrix[i] = new double[Shape[0]];
-            for (var j = 0; j < matrix[i].Length; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                
-                matrix[i][j] = Matrix[j][i];
-                
+                for (var i = t; i < Shape[1]; i+=T)
+                {
+                    matrix[i] = new double[Shape[0]];
+                    for (var j = 0; j < matrix[i].Length; j++)
+                    {
+
+                        matrix[i][j] = Matrix[j][i];
+
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (var i = 0; i < Shape[1]; i++)
+            {
+                matrix[i] = new double[Shape[0]];
+                for (var j = 0; j < matrix[i].Length; j++)
+                {
+
+                    matrix[i][j] = Matrix[j][i];
+
+                }
             }
         }
         return new Matrice(matrix);
@@ -491,7 +575,6 @@ public class Matrice
     public Matrice(double[][] matrix)
     {
         Matrix = matrix;
-        
         Shape=[matrix.Length,matrix[0].Length];
     }
     
@@ -500,7 +583,7 @@ public class Matrice
         Matrix = new double[matrix.Count][];
         for (var i = 0; i < matrix.Count; i++)
         {
-            Matrix[i] = matrix[i].ToArray();
+            Matrix[i] = [..matrix[i]];
         }
         Shape=[matrix.Count,matrix[0].Count];
     }
@@ -538,7 +621,7 @@ public class Matrice
             }
         }
     }
-    
+
     public Matrice(List<double> array,int[] shape)
     {
         Shape=shape;
@@ -559,9 +642,13 @@ public class Matrice
         }
     }
 
-    public  static double Determinant(double[][] matrice, int j = 0)
+    /**
+     * Fonction pour calculer le déterminant d'une matrice
+     * matrice: la matrice dont on veut calculer le déterminant
+     * j: l'indice de la colonne à partir de laquelle on veut calculer le déterminant
+     */
+    public static double Determinant(double[][] matrice, int j = 0)
     {
-
         if (matrice.Length == 2 && matrice[0].Length == 2)
         {
             return matrice[0][0] * matrice[1][1] - matrice[1][0] * matrice[0][1];
@@ -577,51 +664,134 @@ public class Matrice
         }
     }
 
+    /**
+     * Fonction pour cloner ou créer une copie de la matrice courante
+     */
     public Matrice Copy() => new(Matrix);
 
-    public Matrice Adjacence()
+    /**
+     * Fonction pour calculer la matrice d'adjacence de la matrice courante
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour calculer la matrice d'adjacence
+     */
+    public Matrice Adjacence(int T=1)
     {
         Matrice mat = new(Shape);
-        for (int i = 0; i < mat.Shape[0]; i++)
+        if (T>1)
         {
-            for (int j = 0; j < mat.Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                mat.Matrix[i][j] = Math.Pow(-1.0,(double)(i+j))*Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+                for (int i = t; i < mat.Shape[0]; i+=T)
+                {
+                    for (int j = 0; j < mat.Shape[1]; j++)
+                    {
+                        mat.Matrix[i][j] = Math.Pow(-1.0, (double)(i + j)) * Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+                    }
+                }
+            };
+            Stopwatch stopwatch = new();
+            stopwatch.Start();
+            ParallelLoopResult result= Parallel.For(0, T, (t) => func(t, T));
+            if (result.IsCompleted)
+            {
+                stopwatch.Stop();
+                Console.WriteLine($"Parallel execution time: {stopwatch.ElapsedMilliseconds} ms");
             }
+        }
+        else
+        {
+            Stopwatch stopwatch = new();
+            stopwatch.Start();
+            for (int i = 0; i < mat.Shape[0]; i++)
+            {
+                for (int j = 0; j < mat.Shape[1]; j++)
+                {
+                    mat.Matrix[i][j] = Math.Pow(-1.0, (double)(i + j)) * Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+                }
+            }
+            stopwatch.Stop();
+            Console.WriteLine($"Sequential execution time: {stopwatch.ElapsedMilliseconds} ms");
         }
         return mat;
     }
 
-
-    public Matrice Hstack(double[] array, string place = "front")
+    /**
+     * Fonction pour ajouter une colonne à la matrice courante
+     *  array: tableau de tableau qui contient la colonne à ajouter
+     *  place: end ou front pour spécifier si la colonne doit être ajoutée à la fin
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour ajouter la colonne à la matrice courante
+     */
+    public Matrice Hstack(double[] array, string place = "front",int T=1)
     {
         Matrice matrice = new([Shape[0], Shape[1] + 1]);
         if (place=="end")
         {
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            if (T > 1)
             {
-                matrice.Matrix[i][Shape[1]] = array[i];
-                for (int j = 0; j < Shape[1]; j++)
+                Action<int, int> func = (int t, int T) =>
                 {
-                    matrice.Matrix[i][j] = Matrix[i][j];
+
+                    for (int i = t; i < Shape[0]; i += T)
+                    {
+                        for (int j = 0; j < Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j] = Matrix[i][j];
+                        }
+                        matrice.Matrix[i][Shape[1]] = array[i];
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for (int i = 0; i < Shape[0]; i++)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = Matrix[i][j];
+                    }
+                    matrice.Matrix[i][Shape[1]] = array[i];
                 }
             }
         }
         else
         {
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            if (T>1)
             {
-                matrice.Matrix[i][0] = array[i];
-                for (int j = 0; j < Shape[1]; j++)
+                Action<int, int> func = (int t, int T) =>
                 {
-                    matrice.Matrix[i][j + 1] = Matrix[i][j];
+                    for (int i = t; i < Shape[0]; i += T)
+                    {
+                        matrice.Matrix[i][0] = array[i];
+                        for (int j = 0; j < Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j + 1] = Matrix[i][j];
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for (int i = 0; i < Shape[0]; i++)
+                {
+                    matrice.Matrix[i][0] = array[i];
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j + 1] = Matrix[i][j];
+                    }
                 }
             }
         }
         return matrice;
     }
 
-    public Matrice Hstack(double[][] array, string place = "front")
+    /**
+     * Fonction pour ajouter plusieurs colonnes à la matrice courante
+     *  array: tableau de tableau qui contient les colonnes à ajouter
+     *  place: end ou front pour spécifier si les colonnes doivent être ajoutées à la fin ou au début de la matrice
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour ajouter les colonnes à la matrice courante
+     */
+    public Matrice Hstack(double[][] array, string place = "front",int T=1)
     {
         Matrice mat = new(array);
         Matrice matrice = new([Shape[0], Shape[1] + mat.Shape[0]]);
@@ -629,63 +799,123 @@ public class Matrice
 
         if (place=="end")
         {
-            for (int i = 0; i < Shape[0]; i++)
+            if (T>1)
             {
-                for (int j = 0; j < Shape[1]; j++)
+                Action<int, int> func = (int t, int T) =>
                 {
-                    matrice.Matrix[i][j] = Matrix[i][j];
-                }
+                    for (int i = t; i < Shape[0]; i+=T)
+                    {
+                        for (int j = 0; j < Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j] = Matrix[i][j];
+                        }
+                    }
+                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    {
+                        for (int j = Shape[1]; j < matrice.Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
             }
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            else
             {
-                for (int j = Shape[1]; j < matrice.Shape[1]; j++)
+                for (int i = 0; i < Shape[0]; i++)
                 {
-                    matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = Matrix[i][j];
+                    }
+                }
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    for (int j = Shape[1]; j < matrice.Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
+                    }
                 }
             }
         }
         else
         {
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            if (T>1)
             {
-                for (int j = 0; j < mat.Shape[1]; j++)
+                Action<int, int> func = (int t, int T) =>
                 {
-                    matrice.Matrix[i][j] = mat.Matrix[i][j];
-                }
+                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    {
+                        for (int j = 0; j < mat.Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j] = mat.Matrix[i][j];
+                        }
+                    }
+                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    {
+                        for (int j = 0; j < Shape[1]; j++)
+                        {
+                            matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
             }
-            for (int i = 0; i < matrice.Shape[0]; i++)
+            else
             {
-                for (int j = 0; j < Shape[1]; j++)
+                for (int i = 0; i < matrice.Shape[0]; i++)
                 {
-                    matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
+                    for (int j = 0; j < mat.Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j] = mat.Matrix[i][j];
+                    }
+                }
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
+                    }
                 }
             }
         }
         return matrice;
     }
 
-    public Matrice Vstack(double[] array,string place="front")
+    /**
+     * Fonction pour ajouter une ligne à la matrice courante
+     *  array: tableau de tableau qui contient la ligne à ajouter
+     *  place: end ou front pour spécifier si la ligne doit être ajoutée à la fin ou au début de la matrice
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour ajouter les lignes à la matrice courante
+     */
+    public Matrice Vstack(double[] array,string place="front",int T=1)
     {
         Matrice matrice = new([Shape[0] + 1, Shape[1]]);
-        switch (place)
+        if (place=="end")
         {
-            case "front":
+            if (T>1)
+            {
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    {
+                        if (i == matrice.Shape[0] - 1)
+                        {
+                            matrice.Matrix[i] = array;
+                        }
+                        else
+                        {
+                            matrice.Matrix[i] = Matrix[i];
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
                 for (int i = 0; i < matrice.Shape[0]; i++)
                 {
-                    if (i == 0)
-                    {
-                        matrice.Matrix[i] = array;
-                    }
-                    else
-                    {
-                        matrice.Matrix[i] = Matrix[i - 1];
-                    }
-                }
-                break;
-            case "end":
-                for (int i = 0; i < matrice.Shape[0]; i++)
-                {
-                    if (i == matrice.Shape[0]-1)
+                    if (i == matrice.Shape[0] - 1)
                     {
                         matrice.Matrix[i] = array;
                     }
@@ -694,8 +924,30 @@ public class Matrice
                         matrice.Matrix[i] = Matrix[i];
                     }
                 }
-                break;
-            default:
+            }
+        }
+        else
+        {
+            if (T>1)
+            {
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    {
+                        if (i == 0)
+                        {
+                            matrice.Matrix[i] = array;
+                        }
+                        else
+                        {
+                            matrice.Matrix[i] = Matrix[i - 1];
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
                 for (int i = 0; i < matrice.Shape[0]; i++)
                 {
                     if (i == 0)
@@ -707,55 +959,87 @@ public class Matrice
                         matrice.Matrix[i] = Matrix[i - 1];
                     }
                 }
-                break;
+            }
         }
         return matrice;
     }
 
 
-
-    public Matrice Vstack(double[][] array, string place = "front")
+    /**
+     * Fonction pour ajouter plusieurs lignes à la matrice courante
+     *  array: tableau de tableau qui contient les lignes à ajouter
+     *  place: end ou front pour spécifier si les lignes doivent être ajoutées à la fin ou au début de la matrice
+     *  T: nombre de thread ou processeur logique qui sera utilisé pour ajouter les lignes à la matrice courante
+     */
+    public Matrice Vstack(double[][] array, string place = "front",int T=1)
     {
         Matrice matrice = new([Shape[0] + array.Length, Shape[1]]);
-        switch (place)
+        if (place=="end")
         {
-            case "front":
-                for (int i = 0; i < array.Length; i++)
+            if (T>1)
+            {
+                Action<int, int> func = (int t, int T) =>
                 {
-                    matrice.Matrix[i] = array[i];
-                }
-                for (int i = array.Length; i < matrice.Shape[0]; i++)
-                {
-                   matrice.Matrix[i] = Matrix[i-array.Length];
-                }
-                break;
-            case "end":
+                    for (int i = t; i < Shape[0]; i += T)
+                    {
+                        matrice.Matrix[i] = Matrix[i];
+                    }
+                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    {
+                        matrice.Matrix[i] = array[i - Shape[0]];
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
                 for (int i = 0; i < Shape[0]; i++)
                 {
-                   matrice.Matrix[i] = Matrix[i];
+                    matrice.Matrix[i] = Matrix[i];
                 }
                 for (int i = Shape[0]; i < matrice.Shape[0]; i++)
                 {
                     matrice.Matrix[i] = array[i - Shape[0]];
                 }
-                break;
-            default:
+            }
+        }
+        else
+        {
+            if (T>1)
+            {
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    {
+                        matrice.Matrix[i] = array[i];
+                    }
+                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    {
+                        matrice.Matrix[i + array.Length] = Matrix[i];
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
                 for (int i = 0; i < array.Length; i++)
                 {
                     matrice.Matrix[i] = array[i];
                 }
                 for (int i = array.Length; i < matrice.Shape[0]; i++)
                 {
-                   matrice.Matrix[i] = Matrix[i-array.Length];
+                    matrice.Matrix[i] = Matrix[i - array.Length];
                 }
-                break;
+            }
         }
         return matrice;
     }
 
+    /**
+     *  fonction pour extraire une sous matrice
+     */
     public static double[][] ExtractCoFacteur(double[][] matrice, int i, int j)
     {
-
         int m = matrice.Length - 1;
         double[][] result = new double[m][];
 
@@ -784,6 +1068,9 @@ public class Matrice
         return result;
     }
 
+    /**
+     *  fonction pour extraire une sous matrice
+     */
     private static double[][] ExtractCoMatrix(double[][] matrice,int j)
     {
 
@@ -812,94 +1099,234 @@ public class Matrice
         return result;
     }
 
-
-    public double Sum()
+    /**
+     *  fonction pour calculer la somme de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la somme ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la somme de la matrice courante
+     */
+    public double Sum(int T=1)
     {
         double som = 0.0;
-        for (int i = 0; i < Shape[0]; i++)
+        if (T>1)
         {
-            for (int j = 0; j < Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                som += Matrix[i][j];
+                for (int i = t; i < Shape[0]; i += T)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        som += Matrix[i][j];
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i ++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    som += Matrix[i][j];
+                }
             }
         }
         return som;
     }
 
-    public double[] CumSum()
+    /**
+     *  fonction pour calculer la somme cumulée de chaque ligne de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la somme cumulée ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la somme cumulée de la matrice courante
+     */
+    public double[] CumSum(int T=1)
     {
         double[] som = new double[Shape[0]];
-        for (int i = 0; i < Shape[0]; i++)
+        if (T>1)
         {
-            for (int j = 0; j < Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                som[i] += Matrix[i][j];
+                for (int i = t; i < Shape[0]; i += T)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        som[i] += Matrix[i][j];
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    som[i] += Matrix[i][j];
+                }
             }
         }
         return som;
     }
 
-    public double Mean()
+    /**
+     *  fonction pour calculer la moyenne de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la moyenne ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la moyenne de la matrice courante
+     */
+    public double Mean(int T=1)
     {
-        return Sum() / (Shape[0] * Shape[1]);
+        return Sum(T) / (Shape[0] * Shape[1]);
     }
 
-    public double[] CumMean()
+    /**
+     *  fonction pour calculer la moyenne cumulée de chaque ligne de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la moyenne cumulée ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la moyenne cumulée de la matrice courante
+     */
+    public double[] CumMean(int T=1)
     {
         double[] arrayMean = new double[Shape[0]];
-        double[] arraySum = CumSum();
-        for (int i = 0; i < Shape[0]; i++)
+        double[] arraySum = CumSum(T);
+        if (T>1)
         {
-            arrayMean[i] = arraySum[i] / Shape[0];
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = t; i < Shape[0]; i+=T)
+                {
+                    arrayMean[i] = arraySum[i] / Shape[1];
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                arrayMean[i] = arraySum[i] / Shape[1];
+            }
         }
         return arrayMean;
     }
 
-    public double Var()
+    /**
+     *  fonction pour calculer la variance de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la variance ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la variance de la matrice courante
+     */
+    public double Var(int T=1)
     {
-        double mean = Mean();
+        double mean = Mean(T);
         double cumsum = 0.0;
-        for (int i = 0; i < Shape[0]; i++)
+        if (T>1)
         {
-            for (int j = 0; j < Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
+                for (int i = t; i < Shape[0]; i+=T)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
+                }
             }
         }
         return cumsum / (Shape[0] * Shape[1]);
     }
 
-    public double Sd()
+    /**
+     *  fonction pour calculer l'écart type de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de l'écart type ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer l'écart type de la matrice courante
+     */
+    public double Sd(int T=1)
     {
-        return Math.Sqrt(Var());
+        return Math.Sqrt(Var(T));
     }
 
-    public double[] CumVar()
+    /**
+     *  fonction pour calculer la variance cumulée de chaque ligne de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la variance cumulée ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la variance cumulée de la matrice courante
+     */
+    public double[] CumVar(int T=1)
     {
         double[] arrayVar = new double[Shape[0]];
-        double[] arrayMean = CumMean();
-        for (int i = 0; i < Shape[0]; i++)
+        double[] arrayMean = CumMean(T);
+        if (T>1)
         {
-            for(int j = 0; j < Shape[1]; j++)
+            Action<int, int> func = (int t, int T) =>
             {
-                arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0)/Shape[1]);
+                for (int i = t; i < Shape[0]; i += T)
+                {
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0) / Shape[1]);
+                    }
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0) / Shape[1]);
+                }
             }
         }
         return arrayVar;
     }
 
-    public double[] CumSd()
+    /**
+     *  fonction pour calculer l'écart type cumulé de chaque ligne de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de l'écart type cumulé ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer l'écart type cumulé de la matrice courante
+     */
+    public double[] CumSd(int T=1)
     {
-        double[] cumVar = CumVar();
+        double[] cumVar = CumVar(T);
         double[] cumsd = new double[Shape[0]];
-        for (int i = 0; i < cumVar.Length; i++)
+        if (T>1)
         {
-            cumsd[i] = Math.Sqrt(cumVar[i]);
+            Action<int,int> func = (int t, int T) =>
+            {
+                for (int i = t; i < Shape[0]; i += T)
+                {
+                    cumsd[i] = Math.Sqrt(cumVar[i]);
+                }
+            };
+            Parallel.For(0, T, (t) => func(t, T));
+        }
+        else
+        {
+            for (int i = 0; i < cumVar.Length; i++)
+            {
+                cumsd[i] = Math.Sqrt(cumVar[i]);
+            }
         }
         return cumsd;
     }
 
-    public Matrice Inverse()
+    /**
+     *  fonction pour calculer la matrice inverse de la matrice courante
+     *  Le paramètre T permet de paralléliser le calcul de la matrice inverse ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour calculer la matrice inverse de la matrice courante
+     */
+    public Matrice Inverse(int T=1)
     {
         double determinant = Determinant(Matrix);
         if (determinant==0)
@@ -908,12 +1335,18 @@ public class Matrice
         }
         else
         {
-            Matrice matrice = Adjacence();
+            Matrice matrice = Adjacence(T);
             matrice /= determinant;
             return matrice;
         }
     }
 
+    /**
+     *  fonction pour générer une matrice de taille shape*shape avec des valeurs 1
+     *  Exemple: Matrice.Ones(3) => [[1,1,1],[1,1,1],[1,1,1]]
+     *  Le paramètre T permet de paralléliser la génération de la matrice ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour générer la matrice 
+     */
     public static Matrice Ones(int shape,int T=1)
     {
         Matrice matrice = new([shape,shape]);
@@ -937,13 +1370,19 @@ public class Matrice
             {
                 for (int j = 0; j < matrice.Shape[1]; j++)
                 {
-                    matrice.Matrix[i][j] = 0.0;
+                    matrice.Matrix[i][j] = 1.0;
                 }
             }
         }
         return matrice;
     }
 
+    /**
+     *  fonction pour générer une matrice de taille shape*shape avec des valeurs 0
+     *  Exemple: Matrice.Zeros(3) => [[0,0,0],[0,0,0],[0,0,0]]
+     *  Le paramètre T permet de paralléliser la génération de la matrice ie le nombre de thread ou processeur logique qui 
+     *  sera utilisé pour générer la matrice 
+     */
     public static Matrice Zeros(int shape,int T=1)
     {
         Matrice matrice = new([shape,shape]);
@@ -974,5 +1413,34 @@ public class Matrice
         return matrice;
     }
 
-    public double[] Solve(double[] beta) => Inverse() * beta;
+
+    /**  
+     * fonction pour résoudre un système d'équation linéaire
+     * en résolvant l'équation matricielle Ax = b => x = A^-1 * b
+     */
+    public double[] Solve(double[] beta,int T=1) => Inverse(T) * beta;
+
+
+    public Matrice(double[] array)
+    {
+        Shape = [array.Length, 1];
+        Matrix = new double[Shape[0]][];
+        for (var i = 0; i < Shape[0]; i++)
+        {
+            Matrix[i] = new double[1];
+            Matrix[i][0] = array[i];
+        }
+    }
+
+    public Matrice(List<double> array)
+    {
+        Shape = [array.Count, 1];
+        Matrix = new double[Shape[0]][];
+        for (var i = 0; i < Shape[0]; i++)
+        {
+            Matrix[i] = new double[1];
+            Matrix[i][0] = array[i];
+        }
+    }
+
 }
