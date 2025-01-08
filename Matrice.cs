@@ -114,6 +114,7 @@ public class Matrice
         }
     }
 
+
     public override int GetHashCode()
     {
         return Shape[0]*Shape[1];
@@ -1545,31 +1546,6 @@ public class Matrice
             Matrix[i][0] = array[i];
         }
     }
-
-    public double[] Flaten(int T = 1)
-    {
-        List<double> result =[];
-        result = [..Matrix[0]];
-        if (T > 1)
-        {
-            Action<int, int> func = (int t, int T) =>
-            {
-                for (int i = t; i < Shape[0]; i+=T)
-                {
-                    result.AddRange(Matrix[i]);
-                }
-            };
-            Parallel.For(0,T,(t)=>func(t,T));
-        }
-        else
-        {
-            for (int i = 0; i < Shape[0]; i++)
-            {
-                result.AddRange(Matrix[i]);
-            }
-        }
-        return [..result];
-    }    
 
     public double[] Flatten(int T = 1)
     {
