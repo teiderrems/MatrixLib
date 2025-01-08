@@ -1,6 +1,4 @@
-﻿using System.ComponentModel.Design;
-using System.Diagnostics;
-using System.Runtime.CompilerServices;
+﻿using System.Diagnostics;
 
 namespace MatriceLib;
 
@@ -9,6 +7,86 @@ public class Matrice
     private int[] 
         Shape { get;}
     private double[][] Matrix { get;}
+
+    public Matrice this[int[] index,int T=1]
+    {
+        get{
+            double[][] result=new double[index.Length][];
+            if (T>1)
+            {
+
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < index.Length; i += T)
+                    {
+                        if(index[i]<Shape[0])
+                            result[i]=Matrix[index[i]];
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for(int i=0;i<index.Length;i++)
+                {
+                    if (index[i] < Shape[0])
+                    {
+                        result[i]=Matrix[index[i]];
+                    }
+                }
+            }
+            return new Matrice(result);
+        }
+    }
+    
+    public Matrice this[int[][] index,int T=1]
+    {
+        get{
+            int[] rowIndex=index[0];
+            int[] colIndex=index[1];
+            double[][] result=new double[rowIndex.Length][];
+            if (T>1)
+            {
+
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < rowIndex.Length; i += T)
+                    {
+                        if (i<Shape[0])
+                        {
+                            result[i] = new double[colIndex.Length];
+                            for (int j = 0; j < colIndex.Length; j++)
+                            {
+                                if (j<Shape[1])
+                                {
+                                    result[i][j]=Matrix[rowIndex[i]][colIndex[j]];
+                                }
+                            }
+                        }
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for (int i = 0; i < rowIndex.Length; i++)
+                {
+                    if (i<Shape[0])
+                    {
+                        result[i] = new double[colIndex.Length];
+                        for (int j = 0; j < colIndex.Length; j++)
+                        {
+                            if (j<Shape[1])
+                            {
+                                result[i][j]=Matrix[rowIndex[i]][colIndex[j]];
+                            }
+                        }
+                    }
+                }
+            }
+            return new Matrice(result);
+        }
+    }
 
 
     public override int GetHashCode()
@@ -49,16 +127,16 @@ public class Matrice
      */
     public override string ToString()
     {
-        string result = "[";
+        string result = "[ ";
         for (var i = 0; i < Shape[0]; i++)
         {
-            result += "[";
+            result += " [";
             for (var j = 0; j < Shape[1]; j++)
             {
                 result += $"{Matrix[i][j]},";
             }
             result = result.Remove(result.Length - 1);
-            result += "],";
+            result += "],\n";
         }
         result = result.Remove(result.Length - 1);
         result += "]";
@@ -264,7 +342,7 @@ public class Matrice
         {
             Action<int, int> func = (int t, int T) =>
             {
-                for (int i = 0; i < matrice.Shape[0]; i++)
+                for (int i = t; i < matrice.Shape[0]; i+=T)
                 {
                     for (int j = 0; j < matrice.Shape[1]; j++)
                     {
@@ -1441,6 +1519,170 @@ public class Matrice
             Matrix[i] = new double[1];
             Matrix[i][0] = array[i];
         }
+    }
+
+    public double[] Flaten(int T = 1)
+    {
+        List<double> result =[];
+        result = [..Matrix[0]];
+        if (T > 1)
+        {
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = t; i < Shape[0]; i+=T)
+                {
+                    result.AddRange(Matrix[i]);
+                }
+            };
+            Parallel.For(0,T,(t)=>func(t,T));
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                result.AddRange(Matrix[i]);
+            }
+        }
+        return [..result];
+    }
+
+    public double[] Squeeze(int T = 1)
+    {
+        List<double> result =[];
+        if (Shape[1]==1)
+        {
+            if (T>1)
+            {
+                Action<int, int> func = (int t, int T) =>
+                {
+                    for (int i = t; i < Shape[0]; i+=T)
+                    {
+                        result.AddRange(Matrix[i]);
+                    }
+                };
+                Parallel.For(0, T, (t) => func(t, T));
+            }
+            else
+            {
+                for (int i = 0; i < Shape[0]; i+=T)
+                {
+                    result.AddRange(Matrix[i]);
+                }
+            }
+            return [..result];
+        }
+        throw new Exception("It is not possible to compress a matrix that has a column and row count greater than 1.");
+    }
+
+    public int[] ArgWhere(bool[] index,int T=1)
+    {
+        Mutex mutex = new Mutex();
+        List<int> result = [];
+        if (T>1)
+        {
+            Action<int, int> func = (int t, int T) =>
+            {
+                for (int i = t; i < index.Length; i+=T)
+                {
+                    if (index[i])
+                    {
+                        mutex.WaitOne();
+                        result.Add(i);
+                        mutex.ReleaseMutex();
+                    }
+                }
+            };
+            Parallel.For(0,T,(t)=>func(t,T));
+        }
+        else
+        {
+            for (int i = 0; i < index.Length; i++)
+            {
+                if(index[i])
+                {
+                    result.Add(i);
+                }
+            }
+        }
+        return [..result];
+    }
+
+    public static bool[] operator >(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(matrice.Matrix[i][j] > val);
+            }
+        }
+        return result.ToArray();
+    }
+
+    public static bool[] operator <(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(matrice.Matrix[i][j] < val);
+            }
+        }
+        return result.ToArray();
+    }
+    
+    public static bool[] operator >=(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(matrice.Matrix[i][j] >= val);
+            }
+        }
+        return result.ToArray();
+    }
+
+    public static bool[] operator <=(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(matrice.Matrix[i][j] <= val);
+            }
+        }
+        return result.ToArray();
+    }
+    
+    public static bool[] operator ==(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(matrice.Matrix[i][j].Equals(val));
+            }
+        }
+        return result.ToArray();
+    }
+    
+    public static bool[] operator !=(Matrice matrice,double val)
+    {
+        List<bool> result = [];
+        for (int i = 0; i < matrice.Shape[0]; i++)
+        {
+            for (int j = 0; j < matrice.Shape[1]; j++)
+            {
+                result.Add(!matrice.Matrix[i][j].Equals(val));
+            }
+        }
+        return result.ToArray();
     }
 
 }
