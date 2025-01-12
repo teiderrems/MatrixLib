@@ -1,11 +1,17 @@
-﻿using System.Diagnostics;
+﻿namespace MatriceLib;
 
-namespace MatriceLib;
+class Input(int t,int T){
+    public int t=t;
+    public int T=T;
+}
 
 public class Matrice
 {
-    private int[] 
-        Shape { get;}
+    private int[] Shape { 
+            get{
+                return [Matrix.Length,Matrix.Length>0?Matrix[0].Length:0];
+            }
+        }
     private double[][] Matrix { get; }
 
     /**
@@ -20,22 +26,43 @@ public class Matrice
      *                                                                [1,2,3],
      *                                                                [7,8,9]]
      */
-    public Matrice this[int[] index,int T=1]
+    public Matrice this[params int[] index]
     {
         get{
             double[][] result=new double[index.Length][];
-            if (T>1)
+            if (index.Length>1000)
             {
-
-                Action<int, int> func = (int t, int T) =>
+                int T=Environment.ProcessorCount-2;
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < index.Length; i += T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < index.Length; i += input.T)
                     {
-                        if(index[i]<Shape[0])
-                            result[i]=Matrix[index[i]];
+                        if (index[i] < Shape[0]){
+
+                            if (m.WaitOne())
+                            {
+                                result[i] = Matrix[index[i]];
+                                m.ReleaseMutex();
+                            }
+                        }
+                        else
+                        {
+                            throw new ArgumentException($"{index[i]} out of range");
+                        }
+
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return new Matrice(result);
             }
             else
             {
@@ -46,71 +73,68 @@ public class Matrice
                         result[i]=Matrix[index[i]];
                     }
                 }
+                return new Matrice(result);
             }
-            return new Matrice(result);
         }
     }
 
-    /**
-     *  Attribut permettant de créer une sous matrice en la remplissant par les lignes et colonnes de la matrice courante dont  les index sont spécifiés dans le tableau index
-     *  index: tableau contenant les indices des lignes et colonnes à extraire
-     *  T: variable qui permet de spécifier le nombre de thread ou processeur logique qui sera utilisé pour extraire les lignes et colonnes de la matrice courante
-     *  exemple: Matrice mat=new([
-     *                  [1,2,3],
-     *                  [4,5,6],
-     *                  [7,8,9]]); 
-     *                  console.WriteLine(mat[
-     *                                         [0,2],
-     *                                         [0,2]]);=>[
-     *                                                     [1,3],
-     *                                                     [7,9]]
-     */
-    public Matrice this[int[][] index,int T=1]
-    {
-        get{
-            int[] rowIndex=index[0];
-            int[] colIndex=index[1];
-            double[][] result=new double[rowIndex.Length][];
-            if (T>1)
-            {
 
-                Action<int, int> func = (int t, int T) =>
-                {
-                    for (int i = t; i < rowIndex.Length; i += T)
+    public Matrice this[params bool[][] bools]{
+        get{
+            List<List<double>> tmp=[];
+            if (Shape[0]>=100)
+            {
+                int T=Environment.ProcessorCount-2;
+                Mutex m=new();
+                int e=0;
+                void F(object? obj){
+
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < Shape[0]; i+=input.T)
                     {
-                        if (i<Shape[0])
+                        List<double> t=[];
+                        int k=0;
+                        for (int j = 0; j < Shape[1]; j++)
                         {
-                            result[i] = new double[colIndex.Length];
-                            for (int j = 0; j < colIndex.Length; j++)
+                            if (bools[i][j])
                             {
-                                if (j<Shape[1])
-                                {
-                                    result[i][j]=Matrix[rowIndex[i]][colIndex[j]];
-                                }
+                                t.Insert(k,Matrix[i][j]);
                             }
                         }
-                    }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
-            }
-            else
-            {
-                for (int i = 0; i < rowIndex.Length; i++)
-                {
-                    if (i<Shape[0])
-                    {
-                        result[i] = new double[colIndex.Length];
-                        for (int j = 0; j < colIndex.Length; j++)
+                        if (m.WaitOne())
                         {
-                            if (j<Shape[1])
-                            {
-                                result[i][j]=Matrix[rowIndex[i]][colIndex[j]];
-                            }
+                            tmp.Insert(e++,t);
+                            m.ReleaseMutex();
                         }
                     }
                 }
+
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return new(tmp);
             }
-            return new Matrice(result);
+            else
+            {
+                for (int i = 0; i < Shape[0]; i++)
+                {
+                    List<double> t=[];
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        if (bools[i][j])
+                        {
+                            t.Add(Matrix[i][j]);
+                        }
+                    }
+                    tmp.Add(t);
+                }
+                return new(tmp);
+            }
         }
     }
 
@@ -126,24 +150,11 @@ public class Matrice
      */
     public override bool Equals(object? obj)
     {
-        if (obj is Matrice matrice)
+        if (obj is not Matrice)
         {
-            if (matrice.Shape[0]==this.Shape[0] && matrice.Shape[1]==this.Shape[1])
-            {
-                for (var i = 0; i < matrice.Shape[0]; i++)
-                {
-                    for (var j = 0; j < matrice.Shape[1]; j++)
-                    {
-                        if (Math.Abs(matrice.Matrix[i][j] - this.Matrix[i][j])!=0)
-                        {
-                            return false;
-                        }
-                    }
-                }
-                return true;
-            }
+            return false;
         }
-        return false;
+        return this==(Matrice)obj;
     }
 
     /**
@@ -202,18 +213,55 @@ public class Matrice
         double[][] tmp = new double[matrice2.
                 Shape[0]][];
         
-        for (var i = 0; i < matrice1.
-                Shape[0]; i++)
+        if (matrice1.Shape[0]>=1000)
         {
-            tmp[i] = new double[matrice1.
-                    Shape[1]];
-            for (var j = 0; j < matrice1.
-                    Shape[1]; j++)
-            {
-                tmp[i][j]=matrice2.Matrix[i][j]+matrice1.Matrix[i][j];
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice1.
+                Shape[0]; i+=input.T)
+                {
+                    if (m.WaitOne())
+                    {
+                        tmp[i] = new double[matrice1.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    for (var j = 0; j < matrice1.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=matrice2.Matrix[i][j]+matrice1.Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice1.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice1.
+                        Shape[1]];
+                for (var j = 0; j < matrice1.
+                        Shape[1]; j++)
+                {
+                    tmp[i][j]=matrice2.Matrix[i][j]+matrice1.Matrix[i][j];
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
     
     /**
@@ -225,21 +273,55 @@ public class Matrice
         if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
             throw new Exception("Matrice must have the same size");
         }
-        double[][] tmp = new double[matrice2.
-                Shape[0]][];
-        
-        for (var i = 0; i < matrice1.
-                Shape[0]; i++)
+        double[][] tmp = new double[matrice2.Shape[0]][];
+        if (matrice1.Shape[0]>=1000)
         {
-            tmp[i] = new double[matrice1.
-                    Shape[1]];
-            for (var j = 0; j < matrice1.
-                    Shape[1]; j++)
-            {
-                tmp[i][j]=matrice2.Matrix[i][j]-matrice1.Matrix[i][j];
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice1.Shape[0]; i+=input.T)
+                {
+                    if (m.WaitOne())
+                    {
+                        tmp[i] = new double[matrice1.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    for (var j = 0; j < matrice1.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=matrice2.Matrix[i][j]-matrice1.Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice1.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice1.
+                        Shape[1]];
+                for (var j = 0; j < matrice1.
+                        Shape[1]; j++)
+                {
+                    tmp[i][j]=matrice2.Matrix[i][j]-matrice1.Matrix[i][j];
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
 
 
@@ -250,21 +332,52 @@ public class Matrice
     public static Matrice operator -(Matrice matrice)
     {
          
-        double[][] tmp = new double[matrice.
-                Shape[0]][];
+        double[][] tmp = new double[matrice.Shape[0]][];
 
-        for (var i = 0; i < matrice.
-                Shape[0]; i++)
+        if (matrice.Shape[0]>=1000)
         {
-            tmp[i] = new double[matrice.
-                    Shape[1]];
-            for (var j = 0; j < matrice.
-                    Shape[1]; j++)
-            {
-                tmp[i][j] = (-1)*matrice.Matrix[i][j];
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j] = (-1)*matrice.Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice.
+                        Shape[1]];
+                for (var j = 0; j < matrice.
+                        Shape[1]; j++)
+                {
+                    tmp[i][j] = (-1)*matrice.Matrix[i][j];
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
 
 
@@ -278,21 +391,56 @@ public class Matrice
         if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
             throw new Exception("Matrice must have the same size");
         }
-        double[][] tmp = new double[matrice2.
-                Shape[0]][];
+        double[][] tmp = new double[matrice2.Shape[0]][];
         
-        for (var i = 0; i < matrice1.
-                Shape[0]; i++)
+        if (matrice1.Shape[0]>=1000)
         {
-            tmp[i] = new double[matrice1.
-                    Shape[1]];
-            for (var j = 0; j < matrice1.
-                    Shape[1]; j++)
-            {
-                tmp[i][j]=matrice2.Matrix[i][j]*matrice1.Matrix[i][j];
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice1.Shape[0]; i+=input.T)
+                {
+                    if (m.WaitOne())
+                    {
+                        tmp[i] = new double[matrice1.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    for (var j = 0; j < matrice1.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=matrice2.Matrix[i][j]*matrice1.Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice1.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice1.
+                        Shape[1]];
+                for (var j = 0; j < matrice1.
+                        Shape[1]; j++)
+                {
+                    tmp[i][j]=matrice2.Matrix[i][j]*matrice1.Matrix[i][j];
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
     
     /**
@@ -304,21 +452,55 @@ public class Matrice
         if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
             throw new Exception("Matrice must have the same size");
         }
-        double[][] tmp = new double[matrice2.
-                Shape[0]][];
+        double[][] tmp = new double[matrice2.Shape[0]][];
         
-        for (var i = 0; i < matrice1.
-                Shape[0]; i++)
+        if (matrice1.Shape[0]>=1000)
         {
-            tmp[i] = new double[matrice1.
-                    Shape[1]];
-            for (var j = 0; j < matrice1.
-                    Shape[1]; j++)
-            {
-                tmp[i][j]=matrice2.Matrix[i][j]/matrice1.Matrix[i][j];
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice1.
+                Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice1.
+                            Shape[1]];
+                    for (var j = 0; j < matrice1.
+                            Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=matrice2.Matrix[i][j]/matrice1.Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice1.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice1.
+                        Shape[1]];
+                for (var j = 0; j < matrice1.
+                        Shape[1]; j++)
+                {
+                    tmp[i][j]=matrice2.Matrix[i][j]/matrice1.Matrix[i][j];
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
 
     /**
@@ -328,15 +510,49 @@ public class Matrice
     public static Matrice operator*(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
-        for (var i = 0; i < matrice.Shape[0]; i++)
+        if (matrice.Shape[0]>=1000)
         {
-            for (var j = 0; j < matrice.Shape[1]; j++)
-            {
-                tmp[i][j]*=cte;
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.
+                Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=matrice.Matrix[i][j]*cte;
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
-
-        return new Matrice(tmp);
+        else
+        {
+            for (var i = 0; i < matrice.
+                Shape[0]; i++)
+            {
+                tmp[i] = new double[matrice.Shape[1]];
+                for (var j = 0; j < matrice.Shape[1]; j++)
+                {
+                    tmp[i][j]=matrice.Matrix[i][j]*cte;
+                }
+            }
+            return new Matrice(tmp);
+        }
     }
 
     /**
@@ -345,15 +561,46 @@ public class Matrice
      */
     public static double[] Unique(double[] array)
     {
-        List<double> list = new();
-        for (int i = 0; i < array.Length; i++)
+        List<double> list =[];
+        if (array.Length>=1000)
         {
-            if (!list.Contains(array[i]))
-            {
-                list.Add(array[i]);
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (int i = input.t; i < array.Length; i+=input.T)
+                {
+                    if (m.WaitOne())
+                    {
+                        if (!list.Contains(array[i]))
+                        {
+                            list.Add(array[i]);
+                        }
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return [..list];
         }
-        return [..list];
+        else
+        {
+            for (int i = 0; i < array.Length; i++)
+            {
+                if (!list.Contains(array[i]))
+                {
+                    list.Add(array[i]);
+                }
+            }
+            return [..list];
+        }
     }
 
     /**
@@ -364,45 +611,41 @@ public class Matrice
     public static Matrice Identity(int shape,int T=1)
     {  
         Matrice matrice = new([shape,shape]);
-        if (T>1)
+        if (T>1 || shape>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < matrice.Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                 {
-                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    if (m.WaitOne())
                     {
-                        if (i == j)
-                        {
-                            matrice.Matrix[i][j] = 1.0;
-                        }
-                        else
-                        {
-                            matrice.Matrix[i][j] = 0.0;
-                        }
+                        matrice.Matrix[i][i]=1.0;
+                        m.ReleaseMutex();
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return matrice;
         }
         else
         {
             for (int i = 0; i < matrice.Shape[0]; i++)
             {
-                for (int j = 0; j < matrice.Shape[1]; j++)
-                {
-                    if (i == j)
-                    {
-                        matrice.Matrix[i][j] = 1.0;
-                    }
-                    else
-                    {
-                        matrice.Matrix[i][j] = 0.0;
-                    }
-                }
+                matrice.Matrix[i][i] = 1.0;
             }
+            return matrice;
         }
-        return matrice;
+        
     }
 
     /**
@@ -414,16 +657,50 @@ public class Matrice
         if (array.Length == matrice.Shape[1])
         {
             double[] result = new double[matrice.Shape[0]];
-            for (int i = 0; i < matrice.Shape[0]; i++)
-            {
-                double som = 0.0;
-                for (int j = 0; j < matrice.Shape[1]; j++)
-                {
-                    som += matrice.Matrix[i][j] * array[j];
+
+            if(matrice.Shape[0]>=1000){
+
+                Mutex m=new();
+                void F(object? obj){
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i+=input.T)
+                    {
+                        double som = 0.0;
+                        for (int j = 0; j < matrice.Shape[1]; j++)
+                        {
+                            som += matrice.Matrix[i][j] * array[j];
+                        }
+                        if (m.WaitOne())
+                        {
+                            result[i] = som;
+                            m.ReleaseMutex();
+                        }
+                    }
                 }
-                result[i] = som;
+                int T=Environment.ProcessorCount-2;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return result;
             }
-            return result;
+            else
+            {
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    double som = 0.0;
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        som += matrice.Matrix[i][j] * array[j];
+                    }
+                    result[i] = som;
+                }
+                return result;
+            }
         }
         else
         {
@@ -438,15 +715,56 @@ public class Matrice
     public static Matrice operator+(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
-        for (var i = 0; i < matrice.Shape[0]; i++)
+        if (matrice.Shape[0]>=1000)
         {
-            for (var j = 0; j < matrice.Shape[1]; j++)
-            {
-                tmp[i][j]+=cte;
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]+=cte;
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
+        else
+        {
+            for (var i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (var j = 0; j < matrice.Shape[1]; j++)
+                {
+                    tmp[i][j]+=cte;
+                }
+            }
 
-        return new Matrice(tmp);
+            return new Matrice(tmp);
+        }
+    }
+    
+    /**
+     *  opérateur pour facilité l'addition des coéfficients d'une matrice avec une constante
+     *  
+     */
+    public static Matrice operator+(double cte,Matrice matrice)
+    {
+        return matrice+cte;
     }
     
     /**
@@ -456,15 +774,97 @@ public class Matrice
     public static Matrice operator-(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
-        for (var i = 0; i < matrice.Shape[0]; i++)
+        if (matrice.Shape[0]>=1000)
         {
-            for (var j = 0; j < matrice.Shape[1]; j++)
-            {
-                tmp[i][j]-=cte;
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]-=cte;
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
+        else
+        {
+            for (var i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (var j = 0; j < matrice.Shape[1]; j++)
+                {
+                    tmp[i][j]-=cte;
+                }
+            }
 
-        return new Matrice(tmp);
+            return new Matrice(tmp);
+        }
+    }
+    
+    /**
+     *  opérateur pour facilité la soustration des coéfficients d'une matrice avec une constante
+     *
+     */
+    public static Matrice operator-(double cte,Matrice matrice)
+    {
+        double[][] tmp = matrice.Matrix;
+        if (matrice.Shape[0]>=1000)
+        {
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]=cte-tmp[i][j];
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
+            }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
+        }
+        else
+        {
+            for (var i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (var j = 0; j < matrice.Shape[1]; j++)
+                {
+                    tmp[i][j]=cte-tmp[i][j];
+                }
+            }
+
+            return new Matrice(tmp);
+        }
     }
     
     /**
@@ -474,15 +874,56 @@ public class Matrice
     public static Matrice operator/(Matrice matrice,double cte)
     {
         double[][] tmp = matrice.Matrix;
-        for (var i = 0; i < matrice.Shape[0]; i++)
+        if (matrice.Shape[0]>=1000)
         {
-            for (var j = 0; j < matrice.Shape[1]; j++)
-            {
-                tmp[i][j]/=cte;
+            Mutex m=new();
+            void F(object? obj){
+                Input input=(Input)obj!;
+                for (var i = input.t; i < matrice.Shape[0]; i+=input.T)
+                {
+                    tmp[i] = new double[matrice.Shape[1]];
+                    for (var j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j]/=cte;
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
+        else
+        {
+            for (var i = 0; i < matrice.Shape[0]; i++)
+            {
+                for (var j = 0; j < matrice.Shape[1]; j++)
+                {
+                    tmp[i][j]/=cte;
+                }
+            }
 
-        return new Matrice(tmp);
+            return new Matrice(tmp);
+        }
+    }
+    
+    /**
+     *  opérateur pour facilité la soustration des coéfficients d'une matrice avec une constante
+     *
+     */
+    public static Matrice operator/(double cte,Matrice matrice)
+    {
+        return matrice/cte;
     }
 
     
@@ -515,20 +956,7 @@ public class Matrice
      */
     public static bool operator !=(Matrice matrice1, Matrice matrice2)
     {
-        if (matrice1.Shape[0]==matrice2.Shape[0] && matrice1.Shape[1]==matrice2.Shape[1])
-        {
-            for (var i = 0; i < matrice1.Shape[0]; i++)
-            {
-                for (var j = 0; j < matrice1.Shape[1]; j++)
-                {
-                    if (Math.Abs(matrice1.Matrix[i][j] - matrice2.Matrix[i][j])!=0)
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
+        return !(matrice1==matrice2);
     }
 
 
@@ -539,54 +967,68 @@ public class Matrice
      */
     public Matrice Dot(Matrice matrice1,int T=1)
     {
-        if (matrice1.Shape[1]!=this.Shape[0])
+        if (matrice1.Shape[0]!=Shape[1])
         {
             throw new Exception("colonne number of matrice1 should be the same than row number of current matrice ");
         }
-        double[][] tmp = new double[this.Shape[0]][];
-        if (T>1)
+        double[][] tmp = new double[Shape[0]][];
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (var i = t; i < matrice1.
-                 Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (var i = input.t; i < Shape[0]; i += input.T)
                 {
-                    tmp[i] = new double[this.
-                        Shape[1]];
-                    double som = 0;
-                    for (var j = 0; j < this.
-                             Shape[1]; j++)
+                    if (m.WaitOne())
                     {
-                        for (var k = 0; k < this.Shape[0]; k++)
+                        tmp[i] = new double[Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    double som = 0;
+                    for (var j = 0; j < Shape[1]; j++)
+                    {
+                        for (var k = 0; k < matrice1.Shape[0]; k++)
                         {
-                            som += matrice1.Matrix[i][k] * this.Matrix[k][j];
+                            som += matrice1.Matrix[i][k] * Matrix[k][j];
                         }
-                        tmp[i][j] = som;
+                        if (m.WaitOne())
+                        {
+                            tmp[i][j] = som;
+                            m.ReleaseMutex();
+                        }
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(tmp);
         }
         else
         {
-            for (var i = 0; i < matrice1.
-                 Shape[0]; i++)
+            for (var i = 0; i < matrice1.Shape[0]; i++)
             {
-                tmp[i] = new double[this.
-                    Shape[1]];
+                tmp[i] = new double[Shape[1]];
                 double som = 0;
-                for (var j = 0; j < this.
-                         Shape[1]; j++)
+                for (var j = 0; j <Shape[1]; j++)
                 {
-                    for (var k = 0; k < this.Shape[0]; k++)
+                    for (var k = 0; k < Shape[0]; k++)
                     {
-                        som += matrice1.Matrix[i][k] * this.Matrix[k][j];
+                        som += matrice1.Matrix[i][k] * Matrix[k][j];
                     }
                     tmp[i][j] = som;
                 }
             }
+            return new Matrice(tmp);
         }
-        return new Matrice(tmp);
+        
     }
 
     /**
@@ -602,19 +1044,34 @@ public class Matrice
             double[] result = new double[matrice.Shape[0]];
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                     {
                         double som = 0.0;
                         for (int j = 0; j < matrice.Shape[1]; j++)
                         {
                             som += matrice.Matrix[i][j] * array[j];
                         }
-                        result[i] = som;
+                        if (m.WaitOne())
+                        {
+                            result[i] = som;
+                            m.ReleaseMutex();
+                        }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return result;
             }
             else
             {
@@ -627,8 +1084,9 @@ public class Matrice
                     }
                     result[i] = som;
                 }
+                return result;
             }
-            return result;
+            
         }
         else
         {
@@ -643,22 +1101,38 @@ public class Matrice
     public Matrice Transpose(int T=1)
     { 
         double[][] matrix = new double[Shape[1]][];
-        if (T>1)
+        if (T>1 || Shape[1]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (var i = t; i < Shape[1]; i+=T)
+                Input input=(Input)obj!;
+                for (var i = input.t; i < Shape[1]; i += input.T)
                 {
-                    matrix[i] = new double[Shape[0]];
-                    for (var j = 0; j < matrix[i].Length; j++)
+                    double[] tmp=new double[Shape[0]];
+                    for (var j = 0; j < Shape[0]; j++)
                     {
 
-                        matrix[i][j] = Matrix[j][i];
+                        tmp[j] = Matrix[j][i];
 
                     }
+                    if (m.WaitOne())
+                    {
+                        matrix[i] = tmp;
+                        m.ReleaseMutex();
+                    }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new Matrice(matrix);
         }
         else
         {
@@ -672,14 +1146,14 @@ public class Matrice
 
                 }
             }
+            return new Matrice(matrix);
         }
-        return new Matrice(matrix);
+        
     }
 
     public Matrice(double[][] matrix)
     {
         Matrix = matrix;
-        Shape=[matrix.Length,matrix[0].Length];
     }
     
     public Matrice(List<List<double>> matrix)
@@ -689,36 +1163,25 @@ public class Matrice
         {
             Matrix[i] = [..matrix[i]];
         }
-        Shape=[matrix.Count,matrix[0].Count];
     }
 
     public Matrice(int[] shape)
     {
-        
-        Shape = shape;
-        Matrix = new double[
-                Shape[0]][];
-        for (var i = 0; i < 
-                Shape[0]; i++)
+        Matrix = new double[shape[0]][];
+        for (var i = 0; i <shape[0]; i++)
         {
-            Matrix[i] = new double[
-                    Shape[1]];
+            Matrix[i] = new double[shape[1]];
         }
     }
 
     public Matrice(double[] array,int[] shape)
     {
-        Shape=shape;
-        Matrix=new double[
-                Shape[0]][];
+        Matrix=new double[shape[0]][];
         var k = 0;
-        for (var i = 0; i < 
-                Shape[0]; i++)
+        for (var i = 0; i <shape[0]; i++)
         {
-            Matrix[i] = new double[
-                    Shape[0]];
-            for (var j = 0; j < 
-                    Shape[1]; j++)
+            Matrix[i] = new double[shape[0]];
+            for (var j = 0; j <shape[1]; j++)
             {
                 Matrix[i][j] = array[k];
                 k++;
@@ -728,17 +1191,12 @@ public class Matrice
 
     public Matrice(List<double> array,int[] shape)
     {
-        Shape=shape;
-        Matrix=new double[
-                Shape[0]][];
+        Matrix=new double[shape[0]][];
         var k = 0;
-        for (var i = 0; i < 
-                Shape[0]; i++)
+        for (var i = 0; i <shape[0]; i++)
         {
-            Matrix[i] = new double[
-                    Shape[0]];
-            for (var j = 0; j < 
-                    Shape[1]; j++)
+            Matrix[i] = new double[shape[0]];
+            for (var j = 0; j <shape[1]; j++)
             {
                 Matrix[i][j] = array[k];
                 k++;
@@ -760,11 +1218,41 @@ public class Matrice
         else
         {
             double deter = 0.0;
-            for (int i = j; i < matrice[0].Length; i++)
+            if (matrice[0].Length>=100)
             {
-                deter += Math.Pow(-1.0, (double)i) * matrice[0][i] * Determinant(ExtractCoMatrix(matrice, i), i);
+                Mutex m=new();
+                void F(object? obj){
+
+                    Input input=(Input)obj!;
+                    for (int i = j+input.t; i < matrice[0].Length; i+=input.T)
+                    {
+                        double tmp=Math.Pow(-1.0, (double)i) * matrice[0][i] * Determinant(ExtractCoMatrix(matrice, i), i);
+                        if (m.WaitOne())
+                        {
+                            deter +=tmp;
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
+                int T=Environment.ProcessorCount-2;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return deter;
             }
-            return deter;
+            else
+            {
+                for (int i = j; i < matrice[0].Length; i++)
+                {
+                    deter += Math.Pow(-1.0, (double)i) * matrice[0][i] * Determinant(ExtractCoMatrix(matrice, i), i);
+                }
+                return deter;
+            }
         }
     }
 
@@ -780,31 +1268,38 @@ public class Matrice
     public Matrice Adjacence(int T=1)
     {
         Matrice mat = new(Shape);
-        if (T>1)
+        if (T>1 || Shape[0]>=10)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < mat.Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < mat.Shape[0]; i += input.T)
                 {
                     for (int j = 0; j < mat.Shape[1]; j++)
                     {
-                        mat.Matrix[i][j] = Math.Pow(-1.0, (double)(i + j)) * Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+                        double tmp=Math.Pow(-1.0, (double)(i + j)) * Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
+                        if (m.WaitOne())
+                        {
+                            mat.Matrix[i][j] =tmp;
+                            m.ReleaseMutex();
+                        }
                     }
                 }
-            };
-            Stopwatch stopwatch = new();
-            stopwatch.Start();
-            ParallelLoopResult result= Parallel.For(0, T, (t) => func(t, T));
-            if (result.IsCompleted)
-            {
-                stopwatch.Stop();
-                Console.WriteLine($"Parallel execution time: {stopwatch.ElapsedMilliseconds} ms");
             }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return mat;
         }
         else
         {
-            Stopwatch stopwatch = new();
-            stopwatch.Start();
             for (int i = 0; i < mat.Shape[0]; i++)
             {
                 for (int j = 0; j < mat.Shape[1]; j++)
@@ -812,10 +1307,9 @@ public class Matrice
                     mat.Matrix[i][j] = Math.Pow(-1.0, (double)(i + j)) * Determinant(ExtractCoFacteur(Copy().Transpose().Matrix, i, j));
                 }
             }
-            stopwatch.Stop();
-            Console.WriteLine($"Sequential execution time: {stopwatch.ElapsedMilliseconds} ms");
+            return mat;
         }
-        return mat;
+        
     }
 
     /**
@@ -829,21 +1323,37 @@ public class Matrice
         Matrice matrice = new([Shape[0], Shape[1] + 1]);
         if (place=="end")
         {
-            if (T > 1)
+            if (T > 1 || Shape[0]>=1000)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
+                    Input input=(Input)obj!;
 
-                    for (int i = t; i < Shape[0]; i += T)
+                    for (int i = input.t; i < Shape[0]; i += input.T)
                     {
+                        double[] tmp=new double[matrice.Shape[1]];
                         for (int j = 0; j < Shape[1]; j++)
                         {
-                            matrice.Matrix[i][j] = Matrix[i][j];
+                            tmp[j] = Matrix[i][j];
                         }
-                        matrice.Matrix[i][Shape[1]] = array[i];
+                        tmp[Shape[1]]=array[i];
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
+                        }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -859,20 +1369,38 @@ public class Matrice
         }
         else
         {
-            if (T>1)
+            if (T > 1 || Shape[0]>=1000)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < Shape[0]; i += T)
+                    Input input=(Input)obj!;
+
+                    for (int i = input.t; i < Shape[0]; i += input.T)
                     {
-                        matrice.Matrix[i][0] = array[i];
+                        double[] tmp=new double[matrice.Shape[1]];
+                        tmp[0]=array[i];
                         for (int j = 0; j < Shape[1]; j++)
                         {
-                            matrice.Matrix[i][j + 1] = Matrix[i][j];
+                            tmp[j+1] = Matrix[i][j];
+                        }
+                        
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
                         }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -905,24 +1433,42 @@ public class Matrice
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < Shape[0]; i+=T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                     {
-                        for (int j = 0; j < Shape[1]; j++)
+                        double[] tmp=new double[matrice.Shape[1]];
+                        for (int j = 0; j < matrice.Shape[1]; j++)
                         {
-                            matrice.Matrix[i][j] = Matrix[i][j];
+                            if (j<Shape[1])
+                            {
+                                tmp[j]=Matrix[i][j];
+                            }
+                            else
+                            {
+                                
+                                tmp[j]=mat.Matrix[i][j-Shape[1]];
+                            }
+                        }
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
                         }
                     }
-                    for (int i = t; i < matrice.Shape[0]; i+=T)
-                    {
-                        for (int j = Shape[1]; j < matrice.Shape[1]; j++)
-                        {
-                            matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
-                        }
-                    }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return matrice;
             }
             else
             {
@@ -940,30 +1486,49 @@ public class Matrice
                         matrice.Matrix[i][j] = mat.Matrix[i][j - Shape[1]];
                     }
                 }
+                return matrice;
             }
         }
         else
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < matrice.Shape[0]; i+=T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                     {
-                        for (int j = 0; j < mat.Shape[1]; j++)
+                        double[] tmp=new double[matrice.Shape[1]];
+                        for (int j = 0; j < matrice.Shape[1]; j++)
                         {
-                            matrice.Matrix[i][j] = mat.Matrix[i][j];
+                            if (j<mat.Shape[1])
+                            {
+                                tmp[j]=mat.Matrix[i][j];
+                            }
+                            else
+                            {
+                                
+                                tmp[j]=Matrix[i][j-mat.Shape[1]];
+                            }
+                        }
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
                         }
                     }
-                    for (int i = t; i < matrice.Shape[0]; i+=T)
-                    {
-                        for (int j = 0; j < Shape[1]; j++)
-                        {
-                            matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
-                        }
-                    }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return matrice;
             }
             else
             {
@@ -981,9 +1546,9 @@ public class Matrice
                         matrice.Matrix[i][j + mat.Shape[1]] = Matrix[i][j];
                     }
                 }
+                return matrice;
             }
         }
-        return matrice;
     }
 
     /**
@@ -999,21 +1564,37 @@ public class Matrice
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                     {
+                        double[] tmp=[];
                         if (i == matrice.Shape[0] - 1)
                         {
-                            matrice.Matrix[i] = array;
+                            tmp= array;
                         }
                         else
                         {
-                            matrice.Matrix[i] = Matrix[i];
+                            tmp= Matrix[i];
+                        }
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
                         }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -1034,21 +1615,37 @@ public class Matrice
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                     {
+                        double[] tmp=[];
                         if (i == 0)
                         {
-                            matrice.Matrix[i] = array;
+                            tmp= array;
                         }
                         else
                         {
-                            matrice.Matrix[i] = Matrix[i - 1];
+                            tmp= Matrix[i-1];
+                        }
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
                         }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -1082,18 +1679,39 @@ public class Matrice
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < Shape[0]; i += T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < Shape[0]; i += input.T)
                     {
-                        matrice.Matrix[i] = Matrix[i];
+                        double[] tmp= Matrix[i];
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
+                        }
                     }
-                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    input.t=0;
+                    for (int i = input.t+Shape[0]; i < matrice.Shape[0]; i += input.T)
                     {
-                        matrice.Matrix[i] = array[i - Shape[0]];
+                        double[] tmp= array[i- Shape[0]];
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
+                        }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -1111,18 +1729,39 @@ public class Matrice
         {
             if (T>1)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < array.Length; i += input.T)
                     {
-                        matrice.Matrix[i] = array[i];
+                        double[] tmp= array[i];
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i]=tmp;
+                            m.ReleaseMutex();
+                        }
                     }
-                    for (int i = t; i < matrice.Shape[0]; i += T)
+                    input.t=0;
+                    for (int i = input.t; i < Shape[0]; i += input.T)
                     {
-                        matrice.Matrix[i + array.Length] = Matrix[i];
+                        double[] tmp= Matrix[i];
+                        if (m.WaitOne())
+                        {
+                            matrice.Matrix[i + array.Length]=tmp;
+                            m.ReleaseMutex();
+                        }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
             }
             else
             {
@@ -1213,17 +1852,32 @@ public class Matrice
         double som = 0.0;
         if (T>1)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i += T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
                     for (int j = 0; j < Shape[1]; j++)
                     {
-                        som += Matrix[i][j];
+                        if (m.WaitOne())
+                        {
+                            som += Matrix[i][j];
+                            m.ReleaseMutex();
+                        }
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return som;
         }
         else
         {
@@ -1234,8 +1888,9 @@ public class Matrice
                     som += Matrix[i][j];
                 }
             }
+            return som;
         }
-        return som;
+        
     }
 
     /**
@@ -1246,19 +1901,36 @@ public class Matrice
     public double[] CumSum(int T=1)
     {
         double[] som = new double[Shape[0]];
-        if (T>1)
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new(); 
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i += T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
+                    double s=0.0;
                     for (int j = 0; j < Shape[1]; j++)
                     {
-                        som[i] += Matrix[i][j];
+                        s+= Matrix[i][j];
+                    }
+                    if (m.WaitOne())
+                    {
+                        som[i]=s;
+                        m.ReleaseMutex();
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return som;
         }
         else
         {
@@ -1269,8 +1941,9 @@ public class Matrice
                     som[i] += Matrix[i][j];
                 }
             }
+            return som;
         }
-        return som;
+        
     }
 
     /**
@@ -1292,16 +1965,32 @@ public class Matrice
     {
         double[] arrayMean = new double[Shape[0]];
         double[] arraySum = CumSum(T);
-        if (T>1)
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
-                    arrayMean[i] = arraySum[i] / Shape[1];
+                    double mean= arraySum[i] / Shape[1];
+                    if (m.WaitOne())
+                    {
+                        arrayMean[i]=mean;
+                        m.ReleaseMutex();
+                    }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return arrayMean;
         }
         else
         {
@@ -1309,8 +1998,9 @@ public class Matrice
             {
                 arrayMean[i] = arraySum[i] / Shape[1];
             }
+            return arrayMean;
         }
-        return arrayMean;
+        
     }
 
     /**
@@ -1322,19 +2012,35 @@ public class Matrice
     {
         double mean = Mean(T);
         double cumsum = 0.0;
-        if (T>1)
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
+                    double v=0.0;
                     for (int j = 0; j < Shape[1]; j++)
                     {
-                        cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
+                        v+= Math.Pow(Matrix[i][j] - mean, 2.0);
+                    }
+                    if (m.WaitOne())
+                    {
+                        cumsum+=v;
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return cumsum / (Shape[0] * Shape[1]);
         }
         else
         {
@@ -1345,8 +2051,9 @@ public class Matrice
                     cumsum += Math.Pow(Matrix[i][j] - mean, 2.0);
                 }
             }
+            return cumsum / (Shape[0] * Shape[1]);
         }
-        return cumsum / (Shape[0] * Shape[1]);
+        
     }
 
     /**
@@ -1368,19 +2075,36 @@ public class Matrice
     {
         double[] arrayVar = new double[Shape[0]];
         double[] arrayMean = CumMean(T);
-        if (T>1)
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i += T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
+                    double v=0.0;
                     for (int j = 0; j < Shape[1]; j++)
                     {
-                        arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0) / Shape[1]);
+                        v += Math.Pow(Matrix[i][j] - arrayMean[i], 2.0) / Shape[1];
+                    }
+                    if (m.WaitOne())
+                    {
+                        arrayVar[i]=v;
+                        m.ReleaseMutex();
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return arrayVar;
         }
         else
         {
@@ -1391,8 +2115,9 @@ public class Matrice
                     arrayVar[i] += (Math.Pow(Matrix[i][j] - arrayMean[i], 2.0) / Shape[1]);
                 }
             }
+            return arrayVar;
         }
-        return arrayVar;
+        
     }
 
     /**
@@ -1404,16 +2129,32 @@ public class Matrice
     {
         double[] cumVar = CumVar(T);
         double[] cumsd = new double[Shape[0]];
-        if (T>1)
+        if (T>1 || Shape[0]>=1000)
         {
-            Action<int,int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i += T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
-                    cumsd[i] = Math.Sqrt(cumVar[i]);
+                    double sd = Math.Sqrt(cumVar[i]);
+                    if (m.WaitOne())
+                    {
+                        cumsd[i]=sd;
+                        m.ReleaseMutex();
+                    }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return cumsd;
         }
         else
         {
@@ -1421,8 +2162,9 @@ public class Matrice
             {
                 cumsd[i] = Math.Sqrt(cumVar[i]);
             }
+            return cumsd;
         }
-        return cumsd;
+        
     }
 
     /**
@@ -1456,17 +2198,34 @@ public class Matrice
         Matrice matrice = new([shape,shape]);
         if (T > 1)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < matrice.Shape[0]; i += T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < matrice.Shape[0]; i += input.T)
                 {
+                    double[] tmp=new double[matrice.Shape[1]];
                     for (int j = 0; j < matrice.Shape[1]; j++)
                     {
-                        matrice.Matrix[i][j] = 1.0;
+                        tmp[j] = 1.0;
+                    }
+                    if (m.WaitOne())
+                    {
+                        matrice.Matrix[i]=tmp;
+                        m.ReleaseMutex();
                     }
                 }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return matrice;
         }
         else
         {
@@ -1477,8 +2236,9 @@ public class Matrice
                     matrice.Matrix[i][j] = 1.0;
                 }
             }
+            return matrice;
         }
-        return matrice;
+        
     }
 
     /**
@@ -1487,34 +2247,9 @@ public class Matrice
      *  Le paramètre T permet de paralléliser la génération de la matrice ie le nombre de thread ou processeur logique qui 
      *  sera utilisé pour générer la matrice 
      */
-    public static Matrice Zeros(int shape,int T=1)
+    public static Matrice Zeros(int shape)
     {
-        Matrice matrice = new([shape,shape]);
-        if (T>1)
-        {
-            Action<int, int> func = (int t, int T) =>
-            {
-                for (int i = t; i < matrice.Shape[0]; i += T)
-                {
-                    for (int j = 0; j < matrice.Shape[1]; j++)
-                    {
-                        matrice.Matrix[i][j] = 0.0;
-                    }
-                }
-            };
-            Parallel.For(0, T, (t) => func(t, T));
-        }
-        else
-        {
-            for (int i = 0; i < matrice.Shape[0]; i++)
-            {
-                for (int j = 0; j < matrice.Shape[1]; j++)
-                {
-                    matrice.Matrix[i][j] = 0.0;
-                }
-            }
-        }
-        return matrice;
+        return new([shape,shape]);
     }
 
 
@@ -1527,9 +2262,8 @@ public class Matrice
 
     public Matrice(double[] array)
     {
-        Shape = [array.Length, 1];
-        Matrix = new double[Shape[0]][];
-        for (var i = 0; i < Shape[0]; i++)
+        Matrix = new double[array.Length][];
+        for (var i = 0; i < array.Length; i++)
         {
             Matrix[i] = new double[1];
             Matrix[i][0] = array[i];
@@ -1538,9 +2272,8 @@ public class Matrice
 
     public Matrice(List<double> array)
     {
-        Shape = [array.Count, 1];
-        Matrix = new double[Shape[0]][];
-        for (var i = 0; i < Shape[0]; i++)
+        Matrix = new double[array.Count][];
+        for (var i = 0; i < array.Count; i++)
         {
             Matrix[i] = new double[1];
             Matrix[i][0] = array[i];
@@ -1551,16 +2284,31 @@ public class Matrice
     {
         List<double> result =[];
         result = [..Matrix[0]];
-        if (T > 1)
+        if (T > 1 || Shape[0]>=1000)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < Shape[0]; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i += input.T)
                 {
-                    result.AddRange(Matrix[i]);
+                    if (m.WaitOne())
+                    {
+                        result.AddRange(Matrix[i]);
+                        m.ReleaseMutex();
+                    }
                 }
-            };
-            Parallel.For(0,T,(t)=>func(t,T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return [..result];
         }
         else
         {
@@ -1568,8 +2316,9 @@ public class Matrice
             {
                 result.AddRange(Matrix[i]);
             }
+            return [..result];
         }
-        return [..result];
+        
     }
 
     public double[] Squeeze(int T = 1)
@@ -1577,16 +2326,31 @@ public class Matrice
         List<double> result =[];
         if (Shape[1]==1)
         {
-            if (T>1)
+            if (T>1 || Shape[0]>=1000)
             {
-                Action<int, int> func = (int t, int T) =>
+                Mutex m=new();
+                void F(object? obj)
                 {
-                    for (int i = t; i < Shape[0]; i+=T)
+                    Input input=(Input)obj!;
+                    for (int i = input.t; i < Shape[0]; i += input.T)
                     {
-                        result.AddRange(Matrix[i]);
+                        if (m.WaitOne())
+                        {
+                            result.AddRange(Matrix[i]);
+                            m.ReleaseMutex();
+                        }
                     }
-                };
-                Parallel.For(0, T, (t) => func(t, T));
+                }
+                T=T==1?Environment.ProcessorCount-2:T;
+                List<Thread> threads=[];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start:F));
+                    threads[i].Start(new Input(i,T));
+                }
+                threads.ForEach(t=>t.Join());
+                m.Dispose();
+                return [..result];
             }
             else
             {
@@ -1594,31 +2358,44 @@ public class Matrice
                 {
                     result.AddRange(Matrix[i]);
                 }
+                return [..result];
             }
-            return [..result];
+            
         }
         throw new Exception("It is not possible to compress a matrix that has a column and row count greater than 1.");
     }
 
     public int[] ArgWhere(bool[] index,int T=1)
     {
-        Mutex mutex = new Mutex();
         List<int> result = [];
         if (T>1)
         {
-            Action<int, int> func = (int t, int T) =>
+            Mutex m=new();
+            void F(object? obj)
             {
-                for (int i = t; i < index.Length; i+=T)
+                Input input=(Input)obj!;
+                for (int i = input.t; i < index.Length; i += input.T)
                 {
                     if (index[i])
                     {
-                        mutex.WaitOne();
-                        result.Add(i);
-                        mutex.ReleaseMutex();
+                        if (m.WaitOne())
+                        {
+                            result.Add(i);
+                            m.ReleaseMutex();
+                        }
                     }
                 }
-            };
-            Parallel.For(0,T,(t)=>func(t,T));
+            }
+            T=T==1?Environment.ProcessorCount-2:T;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return [..result];
         }
         else
         {
@@ -1629,85 +2406,483 @@ public class Matrice
                     result.Add(i);
                 }
             }
+            return [..result];
         }
-        return [..result];
+        
     }
 
-    public static bool[] operator >(Matrice matrice, double val)
+    public static bool[][] operator >(Matrice matrice, double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(matrice.Matrix[i][j] > val);
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] > val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j] > val;
+                }
+            }
+            return result;
+        }
     }
 
-    public static bool[] operator <(Matrice matrice, double val)
+    public static bool[][] operator <(Matrice matrice, double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(matrice.Matrix[i][j] < val);
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] < val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j] < val;
+                }
+            }
+            return result;
+        }
     }
 
-    public static bool[] operator >=(Matrice matrice,double val)
+    public static bool[][] operator >=(Matrice matrice,double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(matrice.Matrix[i][j] >= val);
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] >= val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j] >= val;
+                }
+            }
+            return result;
+        }
     }
 
-    public static bool[] operator <=(Matrice matrice,double val)
+    public static bool[][] operator <=(Matrice matrice,double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(matrice.Matrix[i][j] <= val);
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] <= val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j]<= val;
+                }
+            }
+            return result;
+        }
     }
     
-    public static bool[] operator ==(Matrice matrice,double val)
+    public static bool[][] operator ==(Matrice matrice,double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(matrice.Matrix[i][j].Equals(val));
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] == val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j] == val;
+                }
+            }
+            return result;
+        }
     }
     
-    public static bool[] operator !=(Matrice matrice,double val)
+    public static bool[][] operator !=(Matrice matrice,double val)
     {
-        List<bool> result = [];
-        for (int i = 0; i < matrice.Shape[0]; i++)
+        bool[][] result = new bool[matrice.Shape[0]][];
+
+        if (matrice.Shape[0]>=1000)
         {
-            for (int j = 0; j < matrice.Shape[1]; j++)
-            {
-                result.Add(!matrice.Matrix[i][j].Equals(val));
+            Mutex m=new();
+            void F(object? obj){
+
+                for (int i = 0; i < matrice.Shape[0]; i++)
+                {
+                    if (m.WaitOne())
+                    {
+                        result[i]=new bool[matrice.Shape[1]];
+                        m.ReleaseMutex();
+                    }
+                    bool[] tmp=new bool[matrice.Shape[1]];
+                    for (int j = 0; j < matrice.Shape[1]; j++)
+                    {
+                        tmp[j]=matrice.Matrix[i][j] != val;
+                    }
+                    if (m.WaitOne())
+                    {
+                        result[i]=tmp;
+                        m.ReleaseMutex();
+                    }
+                }
             }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return result;
         }
-        return [.. result];
+        else
+        {
+            for (int i = 0; i < matrice.Shape[0]; i++)
+            {
+                result[i]=new bool[matrice.Shape[1]];
+                for (int j = 0; j < matrice.Shape[1]; j++)
+                {
+                    result[i][j]=matrice.Matrix[i][j] != val;
+                }
+            }
+            return result;
+        }
+    }
+
+
+    public static Matrice Random(int n){
+
+        double[][] tmp=new double[n][];
+        Random random=new();
+        if (n>=1000)
+        {
+            Mutex m=new();
+            void F(object? obj){
+
+                Input input=(Input)obj!;
+                for (int i = input.t; i < n; i+=input.T)
+                {
+                    List<double> res=[]; 
+                    for (int j = 0; j < n; j++)
+                    {
+                        res.Add(random.NextDouble());
+                    }
+                    if(m.WaitOne()){
+                        tmp[i]=[..res];
+                        m.ReleaseMutex();
+                    }
+                }
+            }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new(tmp);
+        }
+        else
+        {
+            for (int i = 0; i < n; i++)
+            {
+                tmp[i]=new double[n]; 
+                for (int j = 0; j < n; j++)
+                {
+                    tmp[i][j]=random.NextDouble();
+                }
+            }
+            return new(tmp);
+        }
+    }
+
+
+    public static Matrice Random(double min,double max,int n){
+
+        double[][] tmp=new double[n][];
+        Random random=new();
+
+        if (n>=1000)
+        {
+            Mutex m=new();
+            void F(object? obj){
+
+                Input input=(Input)obj!;
+                for (int i = input.t; i < n; i+=input.T)
+                {
+                    List<double> res=[]; 
+                    for (int j = 0; j < n; j++)
+                    {
+                        res.Add(random.NextDouble()*(max-min)+min);
+                    }
+                    if(m.WaitOne()){
+                        tmp[i]=[..res];
+                        m.ReleaseMutex();
+                    }
+                }
+            }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new(tmp);
+        }
+        else
+        {
+            for (int i = 0; i < n; i++)
+            {
+                tmp[i]=new double[n]; 
+                for (int j = 0; j < n; j++)
+                {
+                    tmp[i][j]=random.NextDouble()*(max-min)+min;
+                }
+            }
+            return new(tmp);
+        }
+    }
+    
+
+    public static Matrice Random(double max,int n){
+
+        return Random(0,max,n);
+    }
+
+    /**
+        apply function `func` at each value in current matrix
+    */
+    public Matrice Apply(Func<double,double> func){
+
+        double[][] tmp=new double[Shape[0]][];
+
+        if (Shape[0]>=1000)
+        {
+            Mutex m=new();
+            void F(object? obj){
+
+                Input input=(Input)obj!;
+                for (int i = input.t; i < Shape[0]; i+=input.T)
+                {
+                    List<double> res=[]; 
+                    for (int j = 0; j < Shape[1]; j++)
+                    {
+                        res.Add(func(Matrix[i][j]));
+                    }
+                    if(m.WaitOne()){
+                        tmp[i]=[..res];
+                        m.ReleaseMutex();
+                    }
+                }
+            }
+            int T=Environment.ProcessorCount-2;
+            List<Thread> threads=[];
+            for (int i = 0; i < T; i++)
+            {
+                threads.Add(new Thread(start:F));
+                threads[i].Start(new Input(i,T));
+            }
+            threads.ForEach(t=>t.Join());
+            m.Dispose();
+            return new(tmp);
+
+        }
+        else
+        {
+            for (int i = 0; i < Shape[0]; i++)
+            {
+                tmp[i]=new double[Shape[1]]; 
+                for (int j = 0; j < Shape[1]; j++)
+                {
+                    tmp[i][j]=func(Matrix[i][j]);
+                }
+            }
+            return new(tmp);
+        }
     }
 }
