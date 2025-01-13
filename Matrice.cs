@@ -22,7 +22,7 @@ public class Matrice
      *                              [1,2,3],
      *                              [4,5,6],
      *                              [7,8,9]]); 
-     *                              console.WriteLine(mat[[0,2]]);=>[
+     *                              console.WriteLine(mat[0,2]);=>[
      *                                                                [1,2,3],
      *                                                                [7,8,9]]
      */
@@ -49,7 +49,11 @@ public class Matrice
                         }
                         else
                         {
-                            throw new ArgumentException($"{index[i]} out of range");
+                            if (m.WaitOne())
+                            {
+                                result[i]=new double[Shape[1]];
+                                m.ReleaseMutex();
+                            }
                         }
 
                     }
@@ -72,6 +76,10 @@ public class Matrice
                     {
                         result[i]=Matrix[index[i]];
                     }
+                    else
+                    {
+                        result[i] = new double[Shape[1]];
+                    }
                 }
                 return new Matrice(result);
             }
@@ -79,6 +87,25 @@ public class Matrice
     }
 
 
+    /**
+     *  Attribut permettant de créer une sous matrice en la remplissant par les lignes de la matrice courante dont  les index  dans le tableau index
+     *  index: tableau contenant les indices des lignes à extraire
+     *  T: variable qui permet de spécifier le nombre de thread ou processeur logique qui sera utilisé pour extraire les lignes de la matrice courante
+     *  exemple: Matrice mat=new([
+     *                              [1,2,3],
+     *                              [4,5,6],
+     *                              [7,8,9]]); 
+     *                              console.WriteLine(mat[[
+     *                              [true,false,true],
+     *                              [true,false,true],
+     *                              [true,false,true]]
+     *                              ]);=>[[1,0,3],
+     *                                    [4,0,3],
+     *                                    [7,0,9]]
+     *                              console.WriteLine(mat[mat>3])=>[[0,0,0],
+     *                                                              [4,5,6],
+     *                                                              [7,8,9]]
+     */
     public Matrice this[params bool[][] bools]{
         get{
             List<List<double>> tmp=[];
@@ -99,6 +126,10 @@ public class Matrice
                             if (bools[i][j])
                             {
                                 t.Insert(k,Matrix[i][j]);
+                            }
+                            else
+                            {
+                                t.Insert(k, 0.0);
                             }
                         }
                         if (m.WaitOne())
@@ -129,6 +160,94 @@ public class Matrice
                         if (bools[i][j])
                         {
                             t.Add(Matrix[i][j]);
+                        }
+                        else
+                        {
+                            t.Add(0.0);
+                        }
+                    }
+                    tmp.Add(t);
+                }
+                return new(tmp);
+            }
+        }
+    }
+
+    /**
+ *  Attribut permettant de créer une sous matrice en la remplissant par les lignes de la matrice courante dont  les index  dans le tableau index
+ *  index: tableau contenant les indices des lignes à extraire
+ *  T: variable qui permet de spécifier le nombre de thread ou processeur logique qui sera utilisé pour extraire les lignes de la matrice courante
+ *  exemple: Matrice mat=new([
+ *                              [1,2,3],
+ *                              [4,5,6],
+ *                              [7,8,9]]); 
+ *                              console.WriteLine(mat[[
+ *                              [1,2], line index
+ *                              [0,1] colonne index
+ *                              ]
+ *                              ]);=>[[4,5],
+ *                                    [7,8]]
+ */
+    public Matrice this[params int[][] index]
+    {
+        get
+        {
+            List<List<double>> tmp = [];
+            if (index.Length >= 100)
+            {
+                int T = Environment.ProcessorCount - 2;
+                Mutex m = new();
+                int e = 0;
+                void F(object? obj)
+                {
+                    Input input = (Input)obj!;
+                    for (int i = input.t; i < index.Length; i += input.T)
+                    {
+                        List<double> t = [];
+                        int k = 0;
+                        for (int j = 0; j < index[i].Length; j++)
+                        {
+                            if (index[0][i] < Shape[0] && index[1][j] < Shape[1])
+                            {
+                                t.Insert(k, Matrix[index[0][i]][index[1][j]]);
+                            }
+                            else
+                            {
+                                t.Insert(k, 0.0);
+                            }
+                        }
+                        if (m.WaitOne())
+                        {
+                            tmp.Insert(e++, t);
+                            m.ReleaseMutex();
+                        }
+                    }
+                }
+
+                List<Thread> threads = [];
+                for (int i = 0; i < T; i++)
+                {
+                    threads.Add(new Thread(start: F));
+                    threads[i].Start(new Input(i, T));
+                }
+                threads.ForEach(t => t.Join());
+                m.Dispose();
+                return new(tmp);
+            }
+            else
+            {
+                for (int i = 0; i < index.Length; i++)
+                {
+                    List<double> t = [];
+                    for (int j = 0; j < index[i].Length; j++)
+                    {
+                        if (index[0][i] < Shape[0] && index[1][j] < Shape[1])
+                        {
+                            t.Add(Matrix[index[0][i]][index[1][j]]);
+                        }
+                        else
+                        {
+                            t.Add(0.0);
                         }
                     }
                     tmp.Add(t);
@@ -164,20 +283,26 @@ public class Matrice
      */
     public override string ToString()
     {
-        string result = "[ ";
+        string result = "[";
         for (var i = 0; i < Shape[0]; i++)
         {
             result += " [";
             for (var j = 0; j < Shape[1]; j++)
             {
-                result += $"{Matrix[i][j]},";
+                result += $"{Matrix[i][j]}";
+                if (j<Shape[1]-1)
+                {
+                    result += ",";
+                }
             }
-            result = result.Remove(result.Length - 1);
-            result += "],\n";
+            result += "]";
+            if (i < Shape[0] - 1)
+            {
+                result += ",\n";
+            }
         }
-        result = result.Remove(result.Length - 1);
         result += "]";
-        return $"{result}";
+        return result;
     }
 
     /**
@@ -210,8 +335,7 @@ public class Matrice
         if ((matrice1.Shape[0], matrice1.Shape[1])!=(matrice2.Shape[0], matrice2.Shape[1])){
             throw new Exception("Matrice must have the same size");
         }
-        double[][] tmp = new double[matrice2.
-                Shape[0]][];
+        double[][] tmp = new double[matrice2.Shape[0]][];
         
         if (matrice1.Shape[0]>=1000)
         {

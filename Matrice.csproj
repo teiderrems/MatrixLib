@@ -5,10 +5,12 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
 		<PackageId>Matrice.Lib.Cmr</PackageId>
-		<Version>1.4.5</Version>
+		<Version>1.4.12</Version>
 		<Authors>Teida</Authors>
 		<Company>Noutsa</Company>
 		<Product>Matrice</Product>
+		<RepositoryUrl>https://github.com/teiderrems/MatrixLib</RepositoryUrl>
+		<Description>Library to facilitate the manipulation of matrix operations</Description>
 		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
